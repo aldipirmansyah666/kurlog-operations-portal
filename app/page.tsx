@@ -1,7 +1,19 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
+import {
+  PieChart,
+  Pie,
+  Cell,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  Legend,
+} from 'recharts';
 
 interface ResiItem {
   id?: number;
@@ -16,12 +28,24 @@ interface ResiItem {
   catatan?: string;
 }
 
+const STATUS_COLORS: { [key: string]: string } = {
+  PERJALANAN: '#3b82f6',
+  DELIVERED: '#10b981',
+  RETUR: '#f43f5e',
+  HOLD: '#f59e0b',
+  CCH: '#a855f7',
+};
+
 export default function Home() {
   const [resiList, setResiList] = useState<ResiItem[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [filterTab, setFilterTab] = useState<'all' | 'fu' | 'done'>('all');
+
+  // State Filter Tanggal Tiket
+  const [startDateFilter, setStartDateFilter] = useState<string>('');
+  const [endDateFilter, setEndDateFilter] = useState<string>('');
 
   const [showPasteModal, setShowPasteModal] = useState<boolean>(false);
   const [pasteData, setPasteData] = useState<string>('');
@@ -31,7 +55,7 @@ export default function Home() {
   const [tglTiket, setTglTiket] = useState('');
   const [noResi, setNoResi] = useState('');
   const [agen, setAgen] = useState('');
-  const [layanan, setLayanan] = useState('PE'); // Default Layanan PE
+  const [layanan, setLayanan] = useState('PE');
   const [petugas, setPetugas] = useState('');
   const [statusResi, setStatusResi] = useState('PERJALANAN');
 
@@ -63,6 +87,78 @@ export default function Home() {
     const s = status.toUpperCase();
     return s === 'DELIVERED' || s === 'RETUR';
   };
+
+  // Helper konversi format tanggal DD/MM/YYYY ke YYYY-MM-DD
+  const parseDateToISO = (dateStr?: string) => {
+    if (!dateStr) return '';
+    const parts = dateStr.trim().split('/');
+    if (parts.length === 3) {
+      const [day, month, year] = parts;
+      return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+    }
+    return dateStr;
+  };
+
+  // Logic Filtering Resi (Search, Tab Status, & Filter Tanggal Tiket)
+  const filteredResi = useMemo(() => {
+    return resiList.filter((item) => {
+      // 1. Filter Pencarian
+      const matchSearch =
+        item.no_resi?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        item.agen?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        item.petugas?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        item.status_resi?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        item.tgl_tiket?.toLowerCase().includes(searchQuery.toLowerCase());
+
+      if (!matchSearch) return false;
+
+      // 2. Filter Tab Status
+      if (filterTab === 'fu' && isClosedStatus(item.status_resi)) return false;
+      if (filterTab === 'done' && !isClosedStatus(item.status_resi)) return false;
+
+      // 3. Filter Tanggal Tiket (Range)
+      const itemISO = parseDateToISO(item.tgl_tiket);
+      if (startDateFilter && itemISO < startDateFilter) return false;
+      if (endDateFilter && itemISO > endDateFilter) return false;
+
+      return true;
+    });
+  }, [resiList, searchQuery, filterTab, startDateFilter, endDateFilter]);
+
+  // Analytics Data (Pie Chart Status)
+  const statusChartData = useMemo(() => {
+    const counts: { [key: string]: number } = {
+      PERJALANAN: 0,
+      DELIVERED: 0,
+      RETUR: 0,
+      HOLD: 0,
+      CCH: 0,
+    };
+    filteredResi.forEach((r) => {
+      const st = r.status_resi.toUpperCase();
+      if (counts[st] !== undefined) counts[st]++;
+      else counts[st] = 1;
+    });
+    return Object.keys(counts)
+      .map((key) => ({ name: key, value: counts[key] }))
+      .filter((d) => d.value > 0);
+  }, [filteredResi]);
+
+  // Analytics Data (Top 5 Agen Bermasalah / Butuh FU)
+  const topAgenChartData = useMemo(() => {
+    const agenMap: { [key: string]: number } = {};
+    filteredResi
+      .filter((r) => !isClosedStatus(r.status_resi))
+      .forEach((r) => {
+        const agn = r.agen.toUpperCase();
+        agenMap[agn] = (agenMap[agn] || 0) + 1;
+      });
+
+    return Object.entries(agenMap)
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 5);
+  }, [filteredResi]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -245,20 +341,6 @@ export default function Home() {
     }
   };
 
-  const filteredResi = resiList.filter((item) => {
-    const matchSearch =
-      item.no_resi?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.agen?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.petugas?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.status_resi?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.tgl_tiket?.toLowerCase().includes(searchQuery.toLowerCase());
-
-    if (!matchSearch) return false;
-    if (filterTab === 'fu') return !isClosedStatus(item.status_resi);
-    if (filterTab === 'done') return isClosedStatus(item.status_resi);
-    return true;
-  });
-
   const totalCount = resiList.length;
   const needFUCount = resiList.filter((i) => !isClosedStatus(i.status_resi)).length;
   const doneCount = resiList.filter((i) => isClosedStatus(i.status_resi)).length;
@@ -333,6 +415,62 @@ export default function Home() {
         </div>
       </div>
 
+      {/* PRIORITAS 3: DASHBOARD ANALYTICS VISUAL */}
+      <section className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Chart 1: Pie Chart Distribusi Status */}
+        <div className="bg-slate-900/70 p-6 rounded-2xl border border-slate-800/80 shadow-lg space-y-4">
+          <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
+            📊 Distribusi Status Kendala Resi
+          </h3>
+          <div className="h-64 w-full flex items-center justify-center">
+            {statusChartData.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={statusChartData}
+                    dataKey="value"
+                    nameKey="name"
+                    cx="50%"
+                    cy="50%"
+                    outerRadius={80}
+                    label={({ name, percent }) => `${name} ${((percent || 0) * 100).toFixed(0)}%`}
+                  >
+                    {statusChartData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={STATUS_COLORS[entry.name] || '#8884d8'} />
+                    ))}
+                  </Pie>
+                  <Tooltip contentStyle={{ backgroundColor: '#0f172a', borderRadius: '12px', borderColor: '#334155' }} />
+                  <Legend />
+                </PieChart>
+              </ResponsiveContainer>
+            ) : (
+              <span className="text-xs text-slate-500 italic">Belum ada data untuk grafik status.</span>
+            )}
+          </div>
+        </div>
+
+        {/* Chart 2: Bar Chart Top Agen Perlu Follow Up */}
+        <div className="bg-slate-900/70 p-6 rounded-2xl border border-slate-800/80 shadow-lg space-y-4">
+          <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
+            🔥 Top 5 Agen Perlu Follow Up
+          </h3>
+          <div className="h-64 w-full flex items-center justify-center">
+            {topAgenChartData.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={topAgenChartData} layout="vertical" margin={{ left: 20 }}>
+                  <XAxis type="number" stroke="#64748b" />
+                  <YAxis type="category" dataKey="name" stroke="#cbd5e1" width={110} tick={{ fontSize: 10 }} />
+                  <Tooltip contentStyle={{ backgroundColor: '#0f172a', borderRadius: '12px', borderColor: '#334155' }} />
+                  <Bar dataKey="count" fill="#f59e0b" radius={[0, 8, 8, 0]} name="Jml Resi" />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <span className="text-xs text-slate-500 italic">Tidak ada agen yang memerlukan follow up.</span>
+            )}
+          </div>
+        </div>
+      </section>
+
       {/* Form Single Resi */}
       <section className="bg-slate-900/70 p-6 rounded-2xl border border-slate-800/80 shadow-lg space-y-4">
         <h2 className="text-xs font-bold text-slate-300 uppercase tracking-wider">➕ Tambah Single Resi Baru</h2>
@@ -361,7 +499,6 @@ export default function Home() {
             required
           />
           
-          {/* Dropdown Layanan Khusus PE, PKH, EC3 */}
           <select
             value={layanan}
             onChange={(e) => setLayanan(e.target.value)}
@@ -403,41 +540,74 @@ export default function Home() {
         </form>
       </section>
 
-      {/* Filter & Search */}
-      <div className="flex flex-col md:flex-row justify-between items-center gap-4">
-        <input
-          type="text"
-          placeholder="🔎 Cari No Resi, Agen, Petugas, atau Tgl..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="w-full md:w-80 bg-slate-900/80 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-slate-200 focus:outline-none focus:border-blue-500"
-        />
+      {/* FILTER & SEARCH TERPADU (Termasuk Filter Tanggal Tiket) */}
+      <div className="bg-slate-900/60 p-5 rounded-2xl border border-slate-800/80 space-y-4 backdrop-blur-xl">
+        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
+          {/* Input Search */}
+          <input
+            type="text"
+            placeholder="🔎 Cari No Resi, Agen, Petugas, atau Tgl..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full lg:w-80 bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-slate-200 focus:outline-none focus:border-blue-500"
+          />
 
-        <div className="flex gap-2">
-          <button
-            onClick={() => setFilterTab('all')}
-            className={`px-4 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${
-              filterTab === 'all' ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20' : 'bg-slate-900 text-slate-400'
-            }`}
-          >
-            Semua ({totalCount})
-          </button>
-          <button
-            onClick={() => setFilterTab('fu')}
-            className={`px-4 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${
-              filterTab === 'fu' ? 'bg-amber-600 text-white shadow-md shadow-amber-600/20' : 'bg-slate-900 text-slate-400'
-            }`}
-          >
-            Perlu Follow Up ({needFUCount})
-          </button>
-          <button
-            onClick={() => setFilterTab('done')}
-            className={`px-4 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${
-              filterTab === 'done' ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/20' : 'bg-slate-900 text-slate-400'
-            }`}
-          >
-            Closed ({doneCount})
-          </button>
+          {/* Filter Rentang Tanggal Tiket */}
+          <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
+            <span className="font-medium text-slate-300">📅 Tanggal Tiket:</span>
+            <input
+              type="date"
+              value={startDateFilter}
+              onChange={(e) => setStartDateFilter(e.target.value)}
+              className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-blue-500 cursor-pointer"
+            />
+            <span>s/d</span>
+            <input
+              type="date"
+              value={endDateFilter}
+              onChange={(e) => setEndDateFilter(e.target.value)}
+              className="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-blue-500 cursor-pointer"
+            />
+            {(startDateFilter || endDateFilter) && (
+              <button
+                onClick={() => {
+                  setStartDateFilter('');
+                  setEndDateFilter('');
+                }}
+                className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-[11px] font-semibold cursor-pointer transition-all"
+              >
+                Reset Tgl
+              </button>
+            )}
+          </div>
+
+          {/* Filter Tab Status */}
+          <div className="flex gap-2">
+            <button
+              onClick={() => setFilterTab('all')}
+              className={`px-4 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${
+                filterTab === 'all' ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20' : 'bg-slate-950 text-slate-400 border border-slate-800'
+              }`}
+            >
+              Semua ({totalCount})
+            </button>
+            <button
+              onClick={() => setFilterTab('fu')}
+              className={`px-4 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${
+                filterTab === 'fu' ? 'bg-amber-600 text-white shadow-md shadow-amber-600/20' : 'bg-slate-950 text-slate-400 border border-slate-800'
+              }`}
+            >
+              Perlu FU ({needFUCount})
+            </button>
+            <button
+              onClick={() => setFilterTab('done')}
+              className={`px-4 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${
+                filterTab === 'done' ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/20' : 'bg-slate-950 text-slate-400 border border-slate-800'
+              }`}
+            >
+              Closed ({doneCount})
+            </button>
+          </div>
         </div>
       </div>
 

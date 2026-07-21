@@ -16,7 +16,10 @@ export default function BaggingPage() {
   const [baggingData, setBaggingData] = useState<BaggingRow[]>([]);
   const [isProcessingExcel, setIsProcessingExcel] = useState(false);
   
-  // State untuk menyimpan nama agen yang pesannya baru saja disalin
+  // State untuk menyimpan agen mana saja yang sedang di-COLLAPSE (disembunyikan)
+  const [collapsedAgens, setCollapsedAgens] = useState<{ [key: string]: boolean }>({});
+  
+  // State untuk feedback copy text
   const [copiedAgen, setCopiedAgen] = useState<string | null>(null);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -52,13 +55,33 @@ export default function BaggingPage() {
     });
   };
 
+  // Toggle Buka/Tutup per Card Agen
+  const toggleCollapse = (agenName: string) => {
+    setCollapsedAgens((prev) => ({
+      ...prev,
+      [agenName]: !prev[agenName],
+    }));
+  };
+
+  // Sembunyikan Semua Agen
+  const collapseAll = (agenKeys: string[]) => {
+    const newStatus: { [key: string]: boolean } = {};
+    agenKeys.forEach((key) => (newStatus[key] = true));
+    setCollapsedAgens(newStatus);
+  };
+
+  // Tampilkan Semua Agen
+  const expandAll = () => {
+    setCollapsedAgens({});
+  };
+
   // Fungsi Salin Pesan
   const handleCopyMessage = (text: string, agenName: string) => {
     navigator.clipboard.writeText(text);
     setCopiedAgen(agenName);
     setTimeout(() => {
       setCopiedAgen(null);
-    }, 2000); // Reset status tersalin setelah 2 detik
+    }, 2000);
   };
 
   const filteredBagging = baggingData.filter(
@@ -71,6 +94,8 @@ export default function BaggingPage() {
     acc[agenName].push(row);
     return acc;
   }, {});
+
+  const agenListKeys = Object.keys(groupedByAgen);
 
   return (
     <main className="max-w-7xl mx-auto p-6 md:p-10 space-y-8">
@@ -108,7 +133,7 @@ export default function BaggingPage() {
           </div>
           <div className="bg-slate-900/70 p-5 rounded-2xl border border-blue-500/20">
             <p className="text-[11px] uppercase tracking-wider text-blue-400 font-bold">Jumlah Agen Terdampak</p>
-            <h3 className="text-3xl font-black text-blue-400 mt-1">{Object.keys(groupedByAgen).length} Agen</h3>
+            <h3 className="text-3xl font-black text-blue-400 mt-1">{agenListKeys.length} Agen</h3>
           </div>
         </div>
       )}
@@ -116,9 +141,28 @@ export default function BaggingPage() {
       {/* Cards Per Agen */}
       {isProcessingExcel ? (
         <div className="text-center py-12 text-slate-400">Membaca & Memproses File Excel...</div>
-      ) : Object.keys(groupedByAgen).length > 0 ? (
+      ) : agenListKeys.length > 0 ? (
         <div className="space-y-6">
-          <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider">📋 Draft Pesan Pengingat per Agen</h3>
+          {/* Header Kontrol Massal (Expand / Collapse All) */}
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-slate-900/40 p-4 rounded-xl border border-slate-800">
+            <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider">
+              📋 Draft Pesan Pengingat per Agen
+            </h3>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => collapseAll(agenListKeys)}
+                className="text-xs px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg font-medium border border-slate-700 transition-all cursor-pointer"
+              >
+                📁 Sembunyikan Semua
+              </button>
+              <button
+                onClick={expandAll}
+                className="text-xs px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg font-medium border border-slate-700 transition-all cursor-pointer"
+              >
+                📂 Tampilkan Semua
+              </button>
+            </div>
+          </div>
 
           {Object.entries(groupedByAgen).map(([agenName, items]) => {
             const sampleDate = items[0]?.['Tanggal'] || '-';
@@ -129,22 +173,32 @@ export default function BaggingPage() {
             const encodedMessage = encodeURIComponent(pesanTemplate);
             const waUrl = `https://web.whatsapp.com/send?text=${encodedMessage}`;
             const isCopied = copiedAgen === agenName;
+            const isCollapsed = !!collapsedAgens[agenName];
 
             return (
-              <div key={agenName} className="bg-slate-900/80 p-6 rounded-2xl border border-slate-800 space-y-4 shadow-xl">
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-800 pb-4">
-                  <h4 className="text-base font-bold text-white flex items-center gap-2">
-                    🏢 {agenName}
-                    <span className="px-2.5 py-0.5 rounded-full text-[10px] bg-amber-500/20 text-amber-400 border border-amber-500/30">
-                      {items.length} Paket Belum Dibagging
+              <div key={agenName} className="bg-slate-900/80 p-6 rounded-2xl border border-slate-800 space-y-4 shadow-xl transition-all">
+                {/* Card Header (Baris Nama Agen + Tombol Aksi) */}
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                  <div
+                    onClick={() => toggleCollapse(agenName)}
+                    className="flex items-center gap-2 cursor-pointer group select-none"
+                  >
+                    <span className="text-slate-400 text-sm group-hover:text-white transition-transform">
+                      {isCollapsed ? '►' : '▼'}
                     </span>
-                  </h4>
+                    <h4 className="text-base font-bold text-white flex items-center gap-2">
+                      🏢 {agenName}
+                      <span className="px-2.5 py-0.5 rounded-full text-[10px] bg-amber-500/20 text-amber-400 border border-amber-500/30 font-semibold">
+                        {items.length} Paket Belum Dibagging
+                      </span>
+                    </h4>
+                  </div>
 
-                  {/* Tombol Aksi (Salin & Kirim WA) */}
+                  {/* Tombol Aksi (Salin, Kirim WA, & Toggle Hide) */}
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => handleCopyMessage(pesanTemplate, agenName)}
-                      className={`font-semibold text-xs px-3.5 py-2.5 rounded-xl border transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 ${
+                      className={`font-semibold text-xs px-3.5 py-2 rounded-xl border transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 ${
                         isCopied
                           ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'
                           : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
@@ -157,42 +211,55 @@ export default function BaggingPage() {
                       href={waUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="bg-[#25D366] hover:bg-[#20bd5a] text-white font-bold text-xs px-4 py-2.5 rounded-xl shadow-lg transition-all flex items-center gap-1.5 cursor-pointer active:scale-95"
+                      className="bg-[#25D366] hover:bg-[#20bd5a] text-white font-bold text-xs px-4 py-2 rounded-xl shadow-lg transition-all flex items-center gap-1.5 cursor-pointer active:scale-95"
                     >
                       💬 Kirim ke WA Agen
                     </a>
+
+                    <button
+                      onClick={() => toggleCollapse(agenName)}
+                      className="text-xs px-3 py-2 bg-slate-950 hover:bg-slate-800 text-slate-400 hover:text-white rounded-xl border border-slate-800 font-medium transition-all cursor-pointer"
+                    >
+                      {isCollapsed ? 'Tampilkan detail ▲' : 'Sembunyikan ▼'}
+                    </button>
                   </div>
                 </div>
 
-                <div className="space-y-1.5">
-                  <p className="text-[11px] text-slate-400 font-medium">Draft Pesan WhatsApp:</p>
-                  <pre className="bg-slate-950 p-4 rounded-xl border border-slate-800 text-xs font-mono text-emerald-400 whitespace-pre-wrap selection:bg-emerald-900">
-                    {pesanTemplate}
-                  </pre>
-                </div>
+                {/* Konten Card (Draft Pesan & Tabel) - Dihide saat isCollapsed = true */}
+                {!isCollapsed && (
+                  <div className="space-y-4 pt-2 border-t border-slate-800/80">
+                    <div className="space-y-1.5">
+                      <p className="text-[11px] text-slate-400 font-medium">Draft Pesan WhatsApp:</p>
+                      <pre className="bg-slate-950 p-4 rounded-xl border border-slate-800 text-xs font-mono text-emerald-400 whitespace-pre-wrap max-h-48 overflow-y-auto selection:bg-emerald-900">
+                        {pesanTemplate}
+                      </pre>
+                    </div>
 
-                <div className="overflow-x-auto rounded-xl border border-slate-800">
-                  <table className="w-full text-left text-[11px]">
-                    <thead className="bg-slate-950 text-slate-400 uppercase">
-                      <tr>
-                        <th className="p-3">Tanggal</th>
-                        <th className="p-3">No Resi</th>
-                        <th className="p-3">Kode Layanan</th>
-                        <th className="p-3">Status Bagging</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-800/50 text-slate-300">
-                      {items.map((row, idx) => (
-                        <tr key={idx} className="hover:bg-slate-800/30">
-                          <td className="p-3">{String(row['Tanggal'] || '-')}</td>
-                          <td className="p-3 font-mono font-bold text-blue-400">{String(row['No Resi'] || '-')}</td>
-                          <td className="p-3">{String(row['Kode Layanan'] || '-')}</td>
-                          <td className="p-3 text-amber-400 font-semibold">{String(row['Status Bagging'] || '-')}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                    {/* Tabel dengan scroll internal jika data resi sangat banyak */}
+                    <div className="overflow-x-auto max-h-64 overflow-y-auto rounded-xl border border-slate-800">
+                      <table className="w-full text-left text-[11px]">
+                        <thead className="bg-slate-950 text-slate-400 uppercase sticky top-0 z-10">
+                          <tr>
+                            <th className="p-3">Tanggal</th>
+                            <th className="p-3">No Resi</th>
+                            <th className="p-3">Kode Layanan</th>
+                            <th className="p-3">Status Bagging</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-800/50 text-slate-300">
+                          {items.map((row, idx) => (
+                            <tr key={idx} className="hover:bg-slate-800/30">
+                              <td className="p-3">{String(row['Tanggal'] || '-')}</td>
+                              <td className="p-3 font-mono font-bold text-blue-400">{String(row['No Resi'] || '-')}</td>
+                              <td className="p-3">{String(row['Kode Layanan'] || '-')}</td>
+                              <td className="p-3 text-amber-400 font-semibold">{String(row['Status Bagging'] || '-')}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
               </div>
             );
           })}
