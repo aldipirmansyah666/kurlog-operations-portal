@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import * as XLSX from 'xlsx';
+import { ShoppingBag, ChevronDown, ChevronRight, Copy, Check, Send, FolderClosed, FolderOpen, Upload } from 'lucide-react';
 
 interface BaggingRow {
   'Tanggal'?: any;
@@ -15,11 +16,7 @@ interface BaggingRow {
 export default function BaggingPage() {
   const [baggingData, setBaggingData] = useState<BaggingRow[]>([]);
   const [isProcessingExcel, setIsProcessingExcel] = useState(false);
-  
-  // State untuk menyimpan agen mana saja yang sedang di-COLLAPSE (disembunyikan)
   const [collapsedAgens, setCollapsedAgens] = useState<{ [key: string]: boolean }>({});
-  
-  // State untuk feedback copy text
   const [copiedAgen, setCopiedAgen] = useState<string | null>(null);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -55,7 +52,6 @@ export default function BaggingPage() {
     });
   };
 
-  // Toggle Buka/Tutup per Card Agen
   const toggleCollapse = (agenName: string) => {
     setCollapsedAgens((prev) => ({
       ...prev,
@@ -63,19 +59,16 @@ export default function BaggingPage() {
     }));
   };
 
-  // Sembunyikan Semua Agen
   const collapseAll = (agenKeys: string[]) => {
     const newStatus: { [key: string]: boolean } = {};
     agenKeys.forEach((key) => (newStatus[key] = true));
     setCollapsedAgens(newStatus);
   };
 
-  // Tampilkan Semua Agen
   const expandAll = () => {
     setCollapsedAgens({});
   };
 
-  // Fungsi Salin Pesan
   const handleCopyMessage = (text: string, agenName: string) => {
     navigator.clipboard.writeText(text);
     setCopiedAgen(agenName);
@@ -102,7 +95,7 @@ export default function BaggingPage() {
       {/* Header Bagging */}
       <div className="bg-slate-900/60 p-6 rounded-2xl border border-slate-800/80 space-y-3">
         <h2 className="text-xl font-bold text-white flex items-center gap-2">
-          🛍️ Otomasi Pengingat Bagging Resi
+          <ShoppingBag className="w-6 h-6 text-cyan-400" /> Otomasi Pengingat Bagging Resi
         </h2>
         <p className="text-xs text-slate-400">
           Unggah file Excel KurLog (.xlsx) untuk memfilter paket yang belum dibagging dan langsung menghasilkan template link pesan WhatsApp per agen.
@@ -115,7 +108,7 @@ export default function BaggingPage() {
             accept=".xlsx"
             multiple
             onChange={handleFileUpload}
-            className="block w-full text-xs text-slate-400 file:mr-4 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-500 cursor-pointer bg-slate-950/80 p-2 rounded-xl border border-slate-800"
+            className="block w-full text-xs text-slate-400 file:mr-4 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-500 cursor-pointer bg-slate-950 p-2 rounded-xl border border-slate-800"
           />
         </div>
       </div>
@@ -123,15 +116,15 @@ export default function BaggingPage() {
       {/* Metrics */}
       {baggingData.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-          <div className="bg-slate-900/70 p-5 rounded-2xl border border-slate-800">
+          <div className="bg-slate-900/80 p-5 rounded-2xl border border-slate-800">
             <p className="text-[11px] uppercase tracking-wider text-slate-400 font-bold">Total Resi Diunggah</p>
             <h3 className="text-3xl font-black text-white mt-1">{baggingData.length} Paket</h3>
           </div>
-          <div className="bg-slate-900/70 p-5 rounded-2xl border border-amber-500/20">
+          <div className="bg-slate-900/80 p-5 rounded-2xl border border-amber-500/20">
             <p className="text-[11px] uppercase tracking-wider text-amber-400 font-bold">Belum Dibagging</p>
             <h3 className="text-3xl font-black text-amber-400 mt-1">{filteredBagging.length} Paket</h3>
           </div>
-          <div className="bg-slate-900/70 p-5 rounded-2xl border border-blue-500/20">
+          <div className="bg-slate-900/80 p-5 rounded-2xl border border-blue-500/20">
             <p className="text-[11px] uppercase tracking-wider text-blue-400 font-bold">Jumlah Agen Terdampak</p>
             <h3 className="text-3xl font-black text-blue-400 mt-1">{agenListKeys.length} Agen</h3>
           </div>
@@ -143,7 +136,7 @@ export default function BaggingPage() {
         <div className="text-center py-12 text-slate-400">Membaca & Memproses File Excel...</div>
       ) : agenListKeys.length > 0 ? (
         <div className="space-y-6">
-          {/* Header Kontrol Massal (Expand / Collapse All) */}
+          {/* Header Kontrol Massal */}
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-slate-900/40 p-4 rounded-xl border border-slate-800">
             <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider">
               📋 Draft Pesan Pengingat per Agen
@@ -151,15 +144,15 @@ export default function BaggingPage() {
             <div className="flex items-center gap-2">
               <button
                 onClick={() => collapseAll(agenListKeys)}
-                className="text-xs px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg font-medium border border-slate-700 transition-all cursor-pointer"
+                className="text-xs px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg font-medium border border-slate-700 transition-all flex items-center gap-1.5 cursor-pointer"
               >
-                📁 Sembunyikan Semua
+                <FolderClosed className="w-3.5 h-3.5" /> Sembunyikan Semua
               </button>
               <button
                 onClick={expandAll}
-                className="text-xs px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg font-medium border border-slate-700 transition-all cursor-pointer"
+                className="text-xs px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg font-medium border border-slate-700 transition-all flex items-center gap-1.5 cursor-pointer"
               >
-                📂 Tampilkan Semua
+                <FolderOpen className="w-3.5 h-3.5" /> Tampilkan Semua
               </button>
             </div>
           </div>
@@ -177,14 +170,14 @@ export default function BaggingPage() {
 
             return (
               <div key={agenName} className="bg-slate-900/80 p-6 rounded-2xl border border-slate-800 space-y-4 shadow-xl transition-all">
-                {/* Card Header (Baris Nama Agen + Tombol Aksi) */}
+                {/* Header Card Agen */}
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                   <div
                     onClick={() => toggleCollapse(agenName)}
                     className="flex items-center gap-2 cursor-pointer group select-none"
                   >
-                    <span className="text-slate-400 text-sm group-hover:text-white transition-transform">
-                      {isCollapsed ? '►' : '▼'}
+                    <span className="text-slate-400 group-hover:text-white transition-transform">
+                      {isCollapsed ? <ChevronRight className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
                     </span>
                     <h4 className="text-base font-bold text-white flex items-center gap-2">
                       🏢 {agenName}
@@ -194,48 +187,48 @@ export default function BaggingPage() {
                     </h4>
                   </div>
 
-                  {/* Tombol Aksi (Salin, Kirim WA, & Toggle Hide) */}
+                  {/* Tombol Aksi */}
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => handleCopyMessage(pesanTemplate, agenName)}
-                      className={`font-semibold text-xs px-3.5 py-2 rounded-xl border transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 ${
+                      className={`font-semibold text-xs px-3.5 py-2 rounded-xl border transition-all flex items-center gap-1.5 cursor-pointer ${
                         isCopied
                           ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40'
                           : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
                       }`}
                     >
-                      {isCopied ? '✓ Tersalin!' : '📋 Salin Pesan'}
+                      {isCopied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+                      {isCopied ? 'Tersalin!' : 'Salin Pesan'}
                     </button>
 
                     <a
                       href={waUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="bg-[#25D366] hover:bg-[#20bd5a] text-white font-bold text-xs px-4 py-2 rounded-xl shadow-lg transition-all flex items-center gap-1.5 cursor-pointer active:scale-95"
+                      className="bg-[#25D366] hover:bg-[#20bd5a] text-white font-bold text-xs px-4 py-2 rounded-xl shadow-lg transition-all flex items-center gap-1.5 cursor-pointer"
                     >
-                      💬 Kirim ke WA Agen
+                      <Send className="w-4 h-4" /> Kirim ke WA Agen
                     </a>
 
                     <button
                       onClick={() => toggleCollapse(agenName)}
                       className="text-xs px-3 py-2 bg-slate-950 hover:bg-slate-800 text-slate-400 hover:text-white rounded-xl border border-slate-800 font-medium transition-all cursor-pointer"
                     >
-                      {isCollapsed ? 'Tampilkan detail ▲' : 'Sembunyikan ▼'}
+                      {isCollapsed ? 'Tampilkan ▲' : 'Sembunyikan ▼'}
                     </button>
                   </div>
                 </div>
 
-                {/* Konten Card (Draft Pesan & Tabel) - Dihide saat isCollapsed = true */}
+                {/* Body Card */}
                 {!isCollapsed && (
                   <div className="space-y-4 pt-2 border-t border-slate-800/80">
                     <div className="space-y-1.5">
                       <p className="text-[11px] text-slate-400 font-medium">Draft Pesan WhatsApp:</p>
-                      <pre className="bg-slate-950 p-4 rounded-xl border border-slate-800 text-xs font-mono text-emerald-400 whitespace-pre-wrap max-h-48 overflow-y-auto selection:bg-emerald-900">
+                      <pre className="bg-slate-950 p-4 rounded-xl border border-slate-800 text-xs font-mono text-emerald-400 whitespace-pre-wrap max-h-48 overflow-y-auto">
                         {pesanTemplate}
                       </pre>
                     </div>
 
-                    {/* Tabel dengan scroll internal jika data resi sangat banyak */}
                     <div className="overflow-x-auto max-h-64 overflow-y-auto rounded-xl border border-slate-800">
                       <table className="w-full text-left text-[11px]">
                         <thead className="bg-slate-950 text-slate-400 uppercase sticky top-0 z-10">
