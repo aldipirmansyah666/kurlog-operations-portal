@@ -31,7 +31,7 @@ export default function Home() {
   const [tglTiket, setTglTiket] = useState('');
   const [noResi, setNoResi] = useState('');
   const [agen, setAgen] = useState('');
-  const [layanan, setLayanan] = useState('');
+  const [layanan, setLayanan] = useState('PE'); // Default Layanan PE
   const [petugas, setPetugas] = useState('');
   const [statusResi, setStatusResi] = useState('PERJALANAN');
 
@@ -67,7 +67,7 @@ export default function Home() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!noResi || !agen || !petugas) {
-      alert('Mohon isi Nomor Resi, Agen, dan Petugas!');
+      alert('Mohon isi Nomor Resi, Nama Agen, dan Petugas!');
       return;
     }
 
@@ -96,7 +96,7 @@ export default function Home() {
       setTglTiket('');
       setNoResi('');
       setAgen('');
-      setLayanan('');
+      setLayanan('PE');
       setPetugas('');
       setStatusResi('PERJALANAN');
       fetchResi();
@@ -125,16 +125,16 @@ export default function Home() {
       if (cols.length >= 2 && cols[0]) {
         let tgl = cols[0];
         let resi = cols[1];
-        let agn = cols[2] || 'UMUM';
-        let lyn = cols[3] || '-';
+        let agn = cols[2] || '-';
+        let lyn = cols[3] || 'PE';
         let ptg = cols[4] || 'ADMIN';
         let st = cols[5] ? cols[5].toUpperCase() : 'PERJALANAN';
 
         if (cols.length === 5 || !tgl.includes('/')) {
           tgl = todayStr;
           resi = cols[0];
-          agn = cols[1] || 'UMUM';
-          lyn = cols[2] || '-';
+          agn = cols[1] || '-';
+          lyn = cols[2] || 'PE';
           ptg = cols[3] || 'ADMIN';
           st = cols[4] ? cols[4].toUpperCase() : 'PERJALANAN';
         }
@@ -210,7 +210,7 @@ export default function Home() {
       alert(`Gagal menyimpan catatan: ${error.message}`);
     } else {
       setNewNote('');
-      setSelectedResi(null); // Langsung tutup modal kembali ke beranda
+      setSelectedResi(null);
       await fetchResi();
     }
   };
@@ -354,19 +354,24 @@ export default function Home() {
           />
           <input
             type="text"
-            placeholder="Agen (JNE/J&T)"
+            placeholder="Nama Agen (MUC SWEET / CIMAREME)"
             value={agen}
             onChange={(e) => setAgen(e.target.value)}
             className="bg-slate-950/80 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-200 focus:outline-none focus:border-blue-500"
             required
           />
-          <input
-            type="text"
-            placeholder="Layanan (REG/YES)"
+          
+          {/* Dropdown Layanan Khusus PE, PKH, EC3 */}
+          <select
             value={layanan}
             onChange={(e) => setLayanan(e.target.value)}
-            className="bg-slate-950/80 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-200 focus:outline-none focus:border-blue-500"
-          />
+            className="bg-slate-950/80 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-200 focus:outline-none focus:border-blue-500 cursor-pointer font-semibold"
+          >
+            <option value="PE">PE</option>
+            <option value="PKH">PKH</option>
+            <option value="EC3">EC3</option>
+          </select>
+
           <input
             type="text"
             placeholder="Petugas"
@@ -375,6 +380,7 @@ export default function Home() {
             className="bg-slate-950/80 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-slate-200 focus:outline-none focus:border-blue-500"
             required
           />
+          
           <select
             value={statusResi}
             onChange={(e) => setStatusResi(e.target.value)}
@@ -444,7 +450,7 @@ export default function Home() {
                 <th className="p-4 w-12 text-center font-bold">NO</th>
                 <th className="p-4 font-bold">TGL TIKET</th>
                 <th className="p-4 font-bold">NO. RESI</th>
-                <th className="p-4 font-bold">AGEN</th>
+                <th className="p-4 font-bold">NAMA AGEN</th>
                 <th className="p-4 font-bold">LAYANAN</th>
                 <th className="p-4 font-bold">PETUGAS</th>
                 <th className="p-4 font-bold">STATUS RESI</th>
@@ -473,7 +479,7 @@ export default function Home() {
                       <td className="p-4 font-mono text-slate-300">{item.tgl_tiket || '-'}</td>
                       <td className="p-4 font-mono font-semibold text-blue-400">{item.no_resi}</td>
                       <td className="p-4 font-medium">{item.agen}</td>
-                      <td className="p-4 text-slate-400">{item.layanan || '-'}</td>
+                      <td className="p-4 font-semibold text-amber-400">{item.layanan || 'PE'}</td>
                       <td className="p-4">{item.petugas}</td>
                       <td className="p-4">
                         <select
@@ -590,12 +596,12 @@ export default function Home() {
 
             <div className="bg-slate-950 p-3 rounded-xl border border-slate-800/80 text-xs text-slate-400 space-y-1">
               <p className="font-semibold text-slate-200">Cara Pakai (Format 6 Kolom):</p>
-              <p className="text-amber-400 font-mono">Tgl Tiket | No. Resi | Agen | Layanan | Petugas | Status</p>
+              <p className="text-amber-400 font-mono">Tgl Tiket | No. Resi | Nama Agen | Layanan (PE/PKH/EC3) | Petugas | Status</p>
             </div>
 
             <textarea
               rows={8}
-              placeholder={`Contoh tempel (paste) di sini:\n21/07/2026\tJP1234567\tJ&T\tEZ\tBudi\tPERJALANAN\n21/07/2026\t012345678\tJNE\tREG\tSiti\tDELIVERED`}
+              placeholder={`Contoh tempel (paste) di sini:\n21/07/2026\tP2604210156486\tMUC SWEET\tPKH\tNoviaCC\tPERJALANAN\n21/07/2026\tP2605110091369\tMUC NDH LOGISTIK\tPE\tianCC\tDELIVERED`}
               value={pasteData}
               onChange={(e) => setPasteData(e.target.value)}
               className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs font-mono text-slate-200 focus:outline-none focus:border-blue-500"
