@@ -1,6 +1,6 @@
 'use client';
 
-import { Search, X, Calendar, RotateCcw } from 'lucide-react';
+import { Search, X, Calendar, RotateCcw, Trash2 } from 'lucide-react';
 import type { FilterTab } from '@/lib/types';
 
 interface SearchBarProps {
@@ -16,6 +16,8 @@ interface SearchBarProps {
   needFUCount: number;
   doneCount: number;
   onReset: () => void;
+  selectedCount: number;
+  onDeleteSelected: () => void;
 }
 
 export default function SearchBar({
@@ -31,6 +33,8 @@ export default function SearchBar({
   needFUCount,
   doneCount,
   onReset,
+  selectedCount,
+  onDeleteSelected,
 }: SearchBarProps) {
   const hasFilters = searchQuery || filterTab !== 'all' || startDateFilter || endDateFilter;
 
@@ -78,6 +82,16 @@ export default function SearchBar({
             className="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-blue-500 cursor-pointer"
           />
         </div>
+
+        {selectedCount > 0 && (
+          <button
+            onClick={onDeleteSelected}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-white bg-red-600 hover:bg-red-500 rounded-lg transition-colors cursor-pointer"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            Hapus Terpilih ({selectedCount})
+          </button>
+        )}
 
         {hasFilters && (
           <button

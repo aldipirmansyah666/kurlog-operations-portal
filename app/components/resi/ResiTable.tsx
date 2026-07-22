@@ -1,7 +1,6 @@
 'use client';
 
 import { Pencil, Trash2, Lock, Clock } from 'lucide-react';
-import StatusBadge from '@/app/components/ui/StatusBadge';
 import { STATUS_LIST, isClosedStatus } from '@/lib/constants';
 import type { ResiItem } from '@/lib/types';
 
@@ -13,17 +12,27 @@ function getFUCount(catatan?: string) {
 interface ResiRowProps {
   item: ResiItem;
   index: number;
+  selected: boolean;
+  onToggleSelect: (id: number) => void;
   onStatusChange: (id: number, status: string) => void;
   onFollowUp: (item: ResiItem) => void;
   onDelete: (id: number) => void;
 }
 
-function ResiRow({ item, index, onStatusChange, onFollowUp, onDelete }: ResiRowProps) {
+function ResiRow({ item, index, selected, onToggleSelect, onStatusChange, onFollowUp, onDelete }: ResiRowProps) {
   const fuCount = getFUCount(item.catatan);
   const closed = isClosedStatus(item.status_resi);
 
   return (
-    <tr className="border-b border-slate-800/50 hover:bg-slate-800/20 transition-colors">
+    <tr className={`border-b border-slate-800/50 hover:bg-slate-800/20 transition-colors ${selected ? 'bg-blue-500/5' : ''}`}>
+      <td className="px-4 py-3 text-center">
+        <input
+          type="checkbox"
+          checked={selected}
+          onChange={() => onToggleSelect(item.id!)}
+          className="w-3.5 h-3.5 rounded border-slate-600 bg-slate-800 text-blue-500 focus:ring-blue-500/50 focus:ring-offset-0 cursor-pointer accent-blue-500"
+        />
+      </td>
       <td className="px-4 py-3 text-center text-xs text-slate-500 font-mono">{index + 1}</td>
       <td className="px-4 py-3 text-xs font-mono text-slate-300">{item.tgl_tiket || '-'}</td>
       <td className="px-4 py-3 text-xs font-mono font-semibold text-blue-400">{item.no_resi}</td>
@@ -94,6 +103,9 @@ function ResiRow({ item, index, onStatusChange, onFollowUp, onDelete }: ResiRowP
 interface ResiTableProps {
   items: ResiItem[];
   loading: boolean;
+  selectedIds: Set<number>;
+  onToggleSelect: (id: number) => void;
+  onToggleAll: (ids: number[]) => void;
   onStatusChange: (id: number, status: string) => void;
   onFollowUp: (item: ResiItem) => void;
   onDelete: (id: number) => void;
@@ -102,11 +114,16 @@ interface ResiTableProps {
 export default function ResiTable({
   items,
   loading,
+  selectedIds,
+  onToggleSelect,
+  onToggleAll,
   onStatusChange,
   onFollowUp,
   onDelete,
 }: ResiTableProps) {
-  const headers = ['NO', 'TGL TIKET', 'NO. RESI', 'AGEN', 'LAYANAN', 'PETUGAS', 'STATUS', 'FU', 'CATATAN', 'AKSI'];
+  const headers = ['', 'NO', 'TGL TIKET', 'NO. RESI', 'AGEN', 'LAYANAN', 'PETUGAS', 'STATUS', 'FU', 'CATATAN', 'AKSI'];
+  const visibleIds = items.filter((i) => i.id !== undefined).map((i) => i.id!);
+  const allSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedIds.has(id));
 
   return (
     <div className="bg-slate-900/70 rounded-xl border border-slate-800/80 shadow-sm overflow-hidden">
@@ -119,7 +136,16 @@ export default function ResiTable({
                   key={h}
                   className="px-4 py-3 text-[10px] font-semibold text-slate-400 uppercase tracking-wider"
                 >
-                  {h}
+                  {h === '' ? (
+                    <input
+                      type="checkbox"
+                      checked={allSelected}
+                      onChange={() => onToggleAll(visibleIds)}
+                      className="w-3.5 h-3.5 rounded border-slate-600 bg-slate-800 text-blue-500 focus:ring-blue-500/50 focus:ring-offset-0 cursor-pointer accent-blue-500"
+                    />
+                  ) : (
+                    h
+                  )}
                 </th>
               ))}
             </tr>
@@ -127,13 +153,13 @@ export default function ResiTable({
           <tbody className="text-slate-200">
             {loading ? (
               <tr>
-                <td colSpan={10} className="text-center py-12 text-slate-500 text-sm">
+                <td colSpan={11} className="text-center py-12 text-slate-500 text-sm">
                   Memuat data...
                 </td>
               </tr>
             ) : items.length === 0 ? (
               <tr>
-                <td colSpan={10} className="text-center py-12 text-slate-500 text-sm">
+                <td colSpan={11} className="text-center py-12 text-slate-500 text-sm">
                   Tidak ada data resi ditemukan.
                 </td>
               </tr>
@@ -143,6 +169,8 @@ export default function ResiTable({
                   key={item.id}
                   item={item}
                   index={i}
+                  selected={item.id !== undefined && selectedIds.has(item.id)}
+                  onToggleSelect={onToggleSelect}
                   onStatusChange={onStatusChange}
                   onFollowUp={onFollowUp}
                   onDelete={onDelete}

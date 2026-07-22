@@ -77,6 +77,18 @@ export function useResi() {
     [fetchResi]
   );
 
+  const updateNote = useCallback(
+    async (id: number, newCatatan: string) => {
+      const { error } = await supabase
+        .from('resi')
+        .update({ catatan: newCatatan || null })
+        .eq('id', id);
+      if (error) throw error;
+      await fetchResi();
+    },
+    [fetchResi]
+  );
+
   const deleteResi = useCallback(
     async (id: number) => {
       const { error } = await supabase.from('resi').delete().eq('id', id);
@@ -92,6 +104,15 @@ export function useResi() {
     await fetchResi();
   }, [fetchResi]);
 
+  const deleteResiBatch = useCallback(
+    async (ids: number[]) => {
+      const { error } = await supabase.from('resi').delete().in('id', ids);
+      if (error) throw error;
+      await fetchResi();
+    },
+    [fetchResi]
+  );
+
   const totalCount = resiList.length;
   const needFUCount = resiList.filter((i) => !isClosedStatus(i.status_resi)).length;
   const doneCount = resiList.filter((i) => isClosedStatus(i.status_resi)).length;
@@ -106,8 +127,10 @@ export function useResi() {
     addResiBatch,
     updateStatus,
     addNote,
+    updateNote,
     deleteResi,
     deleteAllResi,
+    deleteResiBatch,
     refetch: fetchResi,
   };
 }

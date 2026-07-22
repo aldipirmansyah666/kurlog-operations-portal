@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Pencil, Clock } from 'lucide-react';
+import { Pencil, Clock, Check, X } from 'lucide-react';
 import Modal from '@/app/components/ui/Modal';
 import type { ResiItem } from '@/lib/types';
 
@@ -10,19 +10,28 @@ function getFUCount(catatan?: string) {
   return catatan.trim().split('\n').filter((l) => l.trim().length > 0).length;
 }
 
+function parseEntries(catatan?: string): string[] {
+  if (!catatan || !catatan.trim()) return [];
+  return catatan.split('\n').filter((l) => l.trim().length > 0);
+}
+
 interface FollowUpModalProps {
   resi: ResiItem | null;
   onClose: () => void;
   onSave: (resi: ResiItem, note: string) => Promise<void>;
+  onUpdateNote: (id: number, newCatatan: string) => Promise<void>;
 }
 
-export default function FollowUpModal({ resi, onClose, onSave }: FollowUpModalProps) {
+export default function FollowUpModal({ resi, onClose, onSave, onUpdateNote }: FollowUpModalProps) {
   const [newNote, setNewNote] = useState('');
   const [saving, setSaving] = useState(false);
+  const [editingIdx, setEditingIdx] = useState<number | null>(null);
+  const [editText, setEditText] = useState('');
 
   if (!resi) return null;
 
-  const fuCount = getFUCount(resi.catatan);
+  const entries = parseEntries(resi.catatan);
+  const fuCount = entries.length;
 
   const handleSave = async () => {
     if (!newNote.trim()) return;
@@ -30,6 +39,36 @@ export default function FollowUpModal({ resi, onClose, onSave }: FollowUpModalPr
     await onSave(resi, newNote);
     setNewNote('');
     setSaving(false);
+    onClose();
+  };
+
+  const handleStartEdit = (idx: number) => {
+    setEditingIdx(idx);
+    setEditText(entries[idx]);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingIdx(null);
+    setEditText('');
+  };
+
+  const handleSaveEdit = async () => {
+    if (editingIdx === null) return;
+    const updated = [...entries];
+    updated[editingIdx] = editText.trim();
+    const newCatatan = updated.filter((e) => e.length > 0).join('\n');
+    await onUpdateNote(resi.id!, newCatatan);
+    setEditingIdx(null);
+    setEditText('');
+    onClose();
+  };
+
+  const handleDeleteEntry = async (idx: number) => {
+    const updated = entries.filter((_, i) => i !== idx);
+    const newCatatan = updated.join('\n');
+    await onUpdateNote(resi.id!, newCatatan);
+    setEditingIdx(null);
+    setEditText('');
     onClose();
   };
 
@@ -51,8 +90,62 @@ export default function FollowUpModal({ resi, onClose, onSave }: FollowUpModalPr
 
         <div className="space-y-2">
           <label className="text-xs font-medium text-slate-400">Riwayat Sebelumnya</label>
-          <div className="bg-slate-950 border border-slate-800 rounded-lg p-3 h-40 overflow-y-auto text-xs font-mono whitespace-pre-line text-slate-300">
-            {resi.catatan || <span className="text-slate-600 italic">Belum ada riwayat.</span>}
+          <div className="bg-slate-950 border border-slate-800 rounded-lg h-48 overflow-y-auto">
+            {entries.length === 0 ? (
+              <p className="p-3 text-xs text-slate-600 italic">Belum ada riwayat.</p>
+            ) : (
+              <ul className="divide-y divide-slate-800/60">
+                {entries.map((entry, idx) => {
+                  const isEditing = editingIdx === idx;
+                  return (
+                    <li key={idx} className="group px-3 py-2 text-xs font-mono text-slate-300">
+                      {isEditing ? (
+                        <div className="space-y-2">
+                          <textarea
+                            rows={2}
+                            value={editText}
+                            onChange={(e) => setEditText(e.target.value)}
+                            autoFocus
+                            className="w-full bg-slate-900 border border-slate-700 rounded-md p-2 text-xs font-mono text-slate-200 focus:outline-none focus:border-blue-500 resize-none"
+                          />
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              onClick={handleSaveEdit}
+                              className="inline-flex items-center gap-1 px-2 py-1 text-[10px] font-semibold text-white bg-blue-600 hover:bg-blue-500 rounded-md transition-colors cursor-pointer"
+                            >
+                              <Check className="w-3 h-3" /> Simpan
+                            </button>
+                            <button
+                              onClick={handleCancelEdit}
+                              className="inline-flex items-center gap-1 px-2 py-1 text-[10px] font-semibold text-slate-400 hover:text-slate-200 bg-slate-800 hover:bg-slate-700 rounded-md transition-colors cursor-pointer"
+                            >
+                              <X className="w-3 h-3" /> Batal
+                            </button>
+                            <button
+                              onClick={() => handleDeleteEntry(idx)}
+                              className="ml-auto inline-flex items-center gap-1 px-2 py-1 text-[10px] font-semibold text-rose-400 hover:text-rose-300 bg-rose-500/10 hover:bg-rose-500/20 rounded-md transition-colors cursor-pointer"
+                            >
+                              Hapus
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="whitespace-pre-line leading-relaxed">{entry}</p>
+                          <button
+                            onClick={() => handleStartEdit(idx)}
+                            className="shrink-0 mt-0.5 p-1 rounded-md text-slate-600 hover:text-blue-400 hover:bg-slate-800 opacity-0 group-hover:opacity-100 transition-all cursor-pointer"
+                            title="Edit catatan ini"
+                          >
+                            <Pencil className="w-3 h-3" />
+                          </button>
+                        </div>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
           </div>
         </div>
 

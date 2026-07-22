@@ -77,5 +77,7 @@ lib/
 - **Supabase env vars** required in `.env.local`: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`. The app will crash without them.
 - **No database migrations** in repo. Schema is managed in Supabase dashboard directly.
 - **`xlsx` is heavy** — only imported in `app/bagging/page.tsx`.
+- **Page size options**: 25/100/150 via dropdown in pagination bar. Default 25. Config in `lib/constants.ts` (`PAGE_SIZE_OPTIONS`, `DEFAULT_PAGE_SIZE`).
+- **Row selection**: Checkboxes in table header/body. Selection state lives in `page.tsx` (`selectedIds: Set<number>`), passed down to `ResiTable`.
 - **Status conventions**: `PERJALANAN`, `DELIVERED`, `RETUR`, `HOLD`, `CCH` — these are business terms, not generic.
 - **Date format** is `DD/MM/YYYY` (Indonesian locale), not ISO.

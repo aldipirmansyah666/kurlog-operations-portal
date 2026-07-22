@@ -22,7 +22,9 @@ export const LAYANAN_OPTIONS = ['PE', 'PKH', 'EC3'] as const;
 
 export const CLOSED_STATUSES: string[] = ['DELIVERED', 'RETUR'];
 
-export const ITEMS_PER_PAGE = 25;
+export const PAGE_SIZE_OPTIONS = [25, 100, 150] as const;
+export type PageSize = (typeof PAGE_SIZE_OPTIONS)[number];
+export const DEFAULT_PAGE_SIZE: PageSize = 25;
 
 export function isClosedStatus(status: string): boolean {
   return CLOSED_STATUSES.includes(status.toUpperCase());

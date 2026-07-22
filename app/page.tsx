@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { ClipboardPaste, Trash2, FileText } from 'lucide-react';
 import { useResi } from '@/lib/hooks/useResi';
 import { useResiFilters } from '@/lib/hooks/useResiFilters';
@@ -23,7 +23,7 @@ import type { ResiItem } from '@/lib/types';
 import { PackageSearch, CheckCircle2, Clock, Trash } from 'lucide-react';
 
 export default function Home() {
-  const { resiList, loading, totalCount, needFUCount, doneCount, addResi, addResiBatch, updateStatus, addNote, deleteResi, deleteAllResi } = useResi();
+  const { resiList, loading, totalCount, needFUCount, doneCount, addResi, addResiBatch, updateStatus, addNote, updateNote, deleteResi, deleteAllResi, deleteResiBatch } = useResi();
   const filters = useResiFilters(resiList);
   const pagination = usePagination(filters.filteredResi);
   const { toasts, showToast, removeToast } = useToast();
@@ -33,6 +33,25 @@ export default function Home() {
   const [showPasteModal, setShowPasteModal] = useState(false);
   const [showDeleteAll, setShowDeleteAll] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [showDeleteSelected, setShowDeleteSelected] = useState(false);
+
+  const handleToggleSelect = useCallback((id: number) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const handleToggleAll = useCallback((ids: number[]) => {
+    setSelectedIds((prev) => {
+      const allSelected = ids.length > 0 && ids.every((id) => prev.has(id));
+      if (allSelected) return new Set<number>();
+      return new Set(ids);
+    });
+  }, []);
 
   const handleAddResi = async (data: Parameters<typeof addResi>[0]) => {
     try {
@@ -70,6 +89,15 @@ export default function Home() {
     }
   };
 
+  const handleUpdateNote = async (id: number, newCatatan: string) => {
+    try {
+      await updateNote(id, newCatatan);
+      showToast('Catatan diperbarui', 'success');
+    } catch {
+      showToast('Gagal memperbarui catatan', 'error');
+    }
+  };
+
   const handleDelete = async () => {
     if (deleteTarget === null) return;
     try {
@@ -89,6 +117,18 @@ export default function Home() {
       showToast('Gagal menghapus data', 'error');
     }
     setShowDeleteAll(false);
+  };
+
+  const handleDeleteSelected = async () => {
+    const ids = Array.from(selectedIds);
+    try {
+      await deleteResiBatch(ids);
+      setSelectedIds(new Set());
+      showToast(`${ids.length} resi berhasil dihapus`, 'success');
+    } catch {
+      showToast('Gagal menghapus resi terpilih', 'error');
+    }
+    setShowDeleteSelected(false);
   };
 
   return (
@@ -173,6 +213,8 @@ export default function Home() {
           needFUCount={needFUCount}
           doneCount={doneCount}
           onReset={filters.resetFilters}
+          selectedCount={selectedIds.size}
+          onDeleteSelected={() => setShowDeleteSelected(true)}
         />
 
         {/* Data Table */}
@@ -191,6 +233,9 @@ export default function Home() {
             <ResiTable
               items={pagination.paginatedItems}
               loading={loading}
+              selectedIds={selectedIds}
+              onToggleSelect={handleToggleSelect}
+              onToggleAll={handleToggleAll}
               onStatusChange={handleStatusChange}
               onFollowUp={setFollowUpResi}
               onDelete={(id) => setDeleteTarget(id)}
@@ -199,11 +244,13 @@ export default function Home() {
               currentPage={pagination.currentPage}
               totalPages={pagination.totalPages}
               totalItems={pagination.totalItems}
+              pageSize={pagination.pageSize}
               startItem={pagination.startItem}
               endItem={pagination.endItem}
               onPrev={pagination.prevPage}
               onNext={pagination.nextPage}
               onGoTo={pagination.goToPage}
+              onPageSizeChange={pagination.changePageSize}
               hasPrev={pagination.hasPrev}
               hasNext={pagination.hasNext}
             />
@@ -212,7 +259,7 @@ export default function Home() {
       </main>
 
       {/* Modals */}
-      <FollowUpModal resi={followUpResi} onClose={() => setFollowUpResi(null)} onSave={handleSaveNote} />
+      <FollowUpModal resi={followUpResi} onClose={() => setFollowUpResi(null)} onSave={handleSaveNote} onUpdateNote={handleUpdateNote} />
       <PasteImportModal open={showPasteModal} onClose={() => setShowPasteModal(false)} onSubmit={handleBatchImport} />
       <ConfirmDialog
         open={deleteTarget !== null}
@@ -231,6 +278,15 @@ export default function Home() {
         message="Semua data resi akan dihapus secara permanen. Tindakan ini tidak dapat dibatalkan."
         confirmText="Hapus Semua"
         requireTyping="HAPUS"
+        variant="danger"
+      />
+      <ConfirmDialog
+        open={showDeleteSelected}
+        onClose={() => setShowDeleteSelected(false)}
+        onConfirm={handleDeleteSelected}
+        title="Hapus Resi Terpilih"
+        message={`${selectedIds.size} resi yang dipilih akan dihapus secara permanen. Tindakan ini tidak dapat dibatalkan.`}
+        confirmText="Hapus"
         variant="danger"
       />
     </>

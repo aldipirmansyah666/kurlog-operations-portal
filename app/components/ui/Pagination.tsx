@@ -1,16 +1,19 @@
 'use client';
 
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
+import { PAGE_SIZE_OPTIONS, type PageSize } from '@/lib/constants';
 
 interface PaginationProps {
   currentPage: number;
   totalPages: number;
   totalItems: number;
+  pageSize: PageSize;
   startItem: number;
   endItem: number;
   onPrev: () => void;
   onNext: () => void;
   onGoTo: (page: number) => void;
+  onPageSizeChange: (size: PageSize) => void;
   hasPrev: boolean;
   hasNext: boolean;
 }
@@ -19,11 +22,13 @@ export default function Pagination({
   currentPage,
   totalPages,
   totalItems,
+  pageSize,
   startItem,
   endItem,
   onPrev,
   onNext,
   onGoTo,
+  onPageSizeChange,
   hasPrev,
   hasNext,
 }: PaginationProps) {
@@ -48,9 +53,22 @@ export default function Pagination({
 
   return (
     <div className="flex items-center justify-between px-1 py-3 text-xs">
-      <span className="text-slate-500">
-        Menampilkan {startItem}–{endItem} dari {totalItems}
-      </span>
+      <div className="flex items-center gap-3">
+        <span className="text-slate-500">
+          Menampilkan {startItem}–{endItem} dari {totalItems}
+        </span>
+        <select
+          value={pageSize}
+          onChange={(e) => onPageSizeChange(Number(e.target.value) as PageSize)}
+          className="bg-slate-800 border border-slate-700 text-slate-300 text-xs rounded-lg px-2 py-1 cursor-pointer focus:outline-none focus:ring-1 focus:ring-blue-500"
+        >
+          {PAGE_SIZE_OPTIONS.map((size) => (
+            <option key={size} value={size}>
+              {size} / halaman
+            </option>
+          ))}
+        </select>
+      </div>
       <div className="flex items-center gap-1">
         <button
           onClick={() => onGoTo(1)}

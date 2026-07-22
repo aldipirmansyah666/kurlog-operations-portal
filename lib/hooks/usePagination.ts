@@ -1,17 +1,18 @@
 import { useState, useMemo, useCallback } from 'react';
-import { ITEMS_PER_PAGE } from '@/lib/constants';
+import { DEFAULT_PAGE_SIZE, type PageSize } from '@/lib/constants';
 
 export function usePagination<T>(items: T[]) {
   const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState<PageSize>(DEFAULT_PAGE_SIZE);
 
-  const totalPages = Math.max(1, Math.ceil(items.length / ITEMS_PER_PAGE));
+  const totalPages = Math.max(1, Math.ceil(items.length / pageSize));
 
   const safePage = Math.min(currentPage, totalPages);
 
   const paginatedItems = useMemo(() => {
-    const start = (safePage - 1) * ITEMS_PER_PAGE;
-    return items.slice(start, start + ITEMS_PER_PAGE);
-  }, [items, safePage]);
+    const start = (safePage - 1) * pageSize;
+    return items.slice(start, start + pageSize);
+  }, [items, safePage, pageSize]);
 
   const goToPage = useCallback((page: number) => {
     setCurrentPage(Math.max(1, page));
@@ -29,20 +30,27 @@ export function usePagination<T>(items: T[]) {
     setCurrentPage(1);
   }, []);
 
-  const startItem = items.length === 0 ? 0 : (safePage - 1) * ITEMS_PER_PAGE + 1;
-  const endItem = Math.min(safePage * ITEMS_PER_PAGE, items.length);
+  const changePageSize = useCallback((newSize: PageSize) => {
+    setPageSize(newSize);
+    setCurrentPage(1);
+  }, []);
+
+  const startItem = items.length === 0 ? 0 : (safePage - 1) * pageSize + 1;
+  const endItem = Math.min(safePage * pageSize, items.length);
 
   return {
     paginatedItems,
     currentPage: safePage,
     totalPages,
     totalItems: items.length,
+    pageSize,
     startItem,
     endItem,
     goToPage,
     nextPage,
     prevPage,
     resetPage,
+    changePageSize,
     hasNext: safePage < totalPages,
     hasPrev: safePage > 1,
   };
