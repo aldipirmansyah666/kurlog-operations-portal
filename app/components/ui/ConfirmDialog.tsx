@@ -44,31 +44,31 @@ export default function ConfirmDialog({
     <Modal open={open} onClose={onClose} title={title} maxWidth="max-w-md">
       <div className="space-y-4">
         <div className="flex gap-3">
-          <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 shrink-0 h-fit">
-            <AlertTriangle className="w-5 h-5 text-amber-400" />
+          <div className="p-2 rounded-lg bg-amber-50 border border-amber-200 shrink-0 h-fit">
+            <AlertTriangle className="w-5 h-5 text-amber-500" />
           </div>
-          <p className="text-sm text-slate-300">{message}</p>
+          <p className="text-sm text-slate-600">{message}</p>
         </div>
 
         {requireTyping && (
           <div className="space-y-2">
-            <label className="text-xs text-slate-400">
-              Ketik <span className="font-mono font-bold text-white bg-slate-800 px-1.5 py-0.5 rounded">{requireTyping}</span> untuk mengonfirmasi:
+            <label className="text-xs text-slate-500">
+              Ketik <span className="font-mono font-bold text-slate-800 bg-slate-100 px-1.5 py-0.5 rounded">{requireTyping}</span> untuk mengonfirmasi:
             </label>
             <input
               type="text"
               value={typed}
               onChange={(e) => setTyped(e.target.value)}
               placeholder={requireTyping}
-              className="w-full bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-blue-500 font-mono placeholder:text-slate-600"
+              className="w-full bg-white border border-[#E2E8F0] rounded-lg px-3 py-2 text-sm text-slate-800 focus:outline-none focus:border-blue-500 font-mono placeholder:text-slate-300"
             />
           </div>
         )}
 
-        <div className="flex justify-end gap-2 pt-2 border-t border-slate-800/80">
+        <div className="flex justify-end gap-2 pt-2 border-t border-[#E2E8F0]">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-sm font-medium text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg transition-colors cursor-pointer"
+            className="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-800 bg-white hover:bg-slate-50 border border-[#E2E8F0] rounded-lg transition-colors cursor-pointer"
           >
             Batal
           </button>

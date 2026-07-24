@@ -11,7 +11,7 @@ export default function StatusBadge({ status, size = 'sm' }: StatusBadgeProps) {
 
   return (
     <span
-      className={`inline-flex items-center font-semibold rounded-md border uppercase tracking-wide ${sizeClass} ${classes}`}
+      className={`inline-flex items-center font-semibold rounded-full border uppercase tracking-wide ${sizeClass} ${classes}`}
     >
       {status}
     </span>

@@ -4,24 +4,24 @@ import { CheckCircle2, XCircle, Info, AlertTriangle, X } from 'lucide-react';
 import type { Toast } from '@/lib/types';
 
 const TOAST_STYLES: Record<string, string> = {
-  success: 'border-emerald-500/40 bg-emerald-500/10',
-  error: 'border-rose-500/40 bg-rose-500/10',
-  info: 'border-sky-500/40 bg-sky-500/10',
-  warning: 'border-amber-500/40 bg-amber-500/10',
+  success: 'border-emerald-200 bg-emerald-50',
+  error: 'border-rose-200 bg-rose-50',
+  info: 'border-sky-200 bg-sky-50',
+  warning: 'border-amber-200 bg-amber-50',
 };
 
 const TOAST_TEXT: Record<string, string> = {
-  success: 'text-emerald-400',
-  error: 'text-rose-400',
-  info: 'text-sky-400',
-  warning: 'text-amber-400',
+  success: 'text-emerald-700',
+  error: 'text-rose-700',
+  info: 'text-sky-700',
+  warning: 'text-amber-700',
 };
 
 const TOAST_ICONS: Record<string, React.ReactNode> = {
-  success: <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />,
-  error: <XCircle className="w-4 h-4 text-rose-400 shrink-0" />,
-  info: <Info className="w-4 h-4 text-sky-400 shrink-0" />,
-  warning: <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />,
+  success: <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />,
+  error: <XCircle className="w-4 h-4 text-rose-500 shrink-0" />,
+  info: <Info className="w-4 h-4 text-sky-500 shrink-0" />,
+  warning: <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />,
 };
 
 export default function ToastContainer({
@@ -46,7 +46,7 @@ export default function ToastContainer({
           </p>
           <button
             onClick={() => onRemove(toast.id)}
-            className="text-slate-400 hover:text-slate-200 transition-colors shrink-0 mt-0.5 cursor-pointer"
+            className="text-slate-400 hover:text-slate-600 transition-colors shrink-0 mt-0.5 cursor-pointer"
           >
             <X className="w-3.5 h-3.5" />
           </button>

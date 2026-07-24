@@ -104,10 +104,10 @@ export default function BaggingPage() {
   return (
     <main className="max-w-7xl mx-auto p-6 md:p-10 space-y-6">
       {/* Header */}
-      <div className="bg-slate-900/70 rounded-xl border border-slate-800/80 p-5 space-y-3">
+      <div className="bg-white rounded-xl border border-[#E2E8F0] p-5 space-y-3 shadow-sm">
         <div className="flex items-center gap-2">
-          <ShoppingBag className="w-5 h-5 text-cyan-400" />
-          <h1 className="text-lg font-semibold text-white">Otomasi Pengingat Bagging</h1>
+          <ShoppingBag className="w-5 h-5 text-cyan-500" />
+          <h1 className="text-lg font-semibold text-slate-800">Otomasi Pengingat Bagging</h1>
         </div>
         <p className="text-xs text-slate-400">
           Upload file Excel KurLog untuk memfilter paket belum dibagging dan membuat template pesan WhatsApp per agen.
@@ -118,7 +118,7 @@ export default function BaggingPage() {
             accept=".xlsx"
             multiple
             onChange={handleFileUpload}
-            className="block w-full text-xs text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-medium file:bg-blue-600 file:text-white hover:file:bg-blue-500 file:cursor-pointer bg-slate-950 p-2 rounded-lg border border-slate-800 cursor-pointer"
+            className="block w-full text-xs text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-medium file:bg-[#1E293B] file:text-white hover:file:bg-slate-700 file:cursor-pointer bg-slate-50 p-2 rounded-lg border border-[#E2E8F0] cursor-pointer"
           />
         </div>
       </div>
@@ -126,43 +126,43 @@ export default function BaggingPage() {
       {/* Metrics */}
       {baggingData.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="bg-slate-900/70 p-4 rounded-xl border border-slate-800/80">
+          <div className="bg-white p-4 rounded-xl border border-[#E2E8F0] border-l-4 border-l-blue-500 shadow-sm">
             <p className="text-[11px] uppercase tracking-wider text-slate-400 font-semibold">Total Resi</p>
-            <h3 className="text-2xl font-bold text-white mt-1">{baggingData.length}</h3>
+            <h3 className="text-2xl font-bold text-slate-800 mt-1">{baggingData.length}</h3>
           </div>
-          <div className="bg-slate-900/70 p-4 rounded-xl border border-amber-500/20">
-            <p className="text-[11px] uppercase tracking-wider text-amber-400 font-semibold">Belum Dibagging</p>
-            <h3 className="text-2xl font-bold text-amber-400 mt-1">{filteredBagging.length}</h3>
+          <div className="bg-white p-4 rounded-xl border border-[#E2E8F0] border-l-4 border-l-amber-500 shadow-sm">
+            <p className="text-[11px] uppercase tracking-wider text-amber-500 font-semibold">Belum Dibagging</p>
+            <h3 className="text-2xl font-bold text-amber-600 mt-1">{filteredBagging.length}</h3>
           </div>
-          <div className="bg-slate-900/70 p-4 rounded-xl border border-blue-500/20">
-            <p className="text-[11px] uppercase tracking-wider text-blue-400 font-semibold">Agen Terdampak</p>
-            <h3 className="text-2xl font-bold text-blue-400 mt-1">{agenKeys.length}</h3>
+          <div className="bg-white p-4 rounded-xl border border-[#E2E8F0] border-l-4 border-l-blue-400 shadow-sm">
+            <p className="text-[11px] uppercase tracking-wider text-blue-500 font-semibold">Agen Terdampak</p>
+            <h3 className="text-2xl font-bold text-blue-600 mt-1">{agenKeys.length}</h3>
           </div>
         </div>
       )}
 
       {/* Content */}
       {isProcessingExcel ? (
-        <div className="bg-slate-900/70 rounded-xl border border-slate-800/80 p-12 text-center text-sm text-slate-400">
+        <div className="bg-white rounded-xl border border-[#E2E8F0] p-12 text-center text-sm text-slate-400 shadow-sm">
           Membaca file Excel...
         </div>
       ) : agenKeys.length > 0 ? (
         <div className="space-y-4">
           {/* Controls */}
-          <div className="flex items-center justify-between bg-slate-900/40 p-3 rounded-lg border border-slate-800">
-            <h3 className="text-xs font-semibold text-slate-300 uppercase tracking-wider">
+          <div className="flex items-center justify-between bg-white p-3 rounded-lg border border-[#E2E8F0] shadow-sm">
+            <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
               Draft Pesan per Agen
             </h3>
             <div className="flex items-center gap-1.5">
               <button
                 onClick={() => collapseAll(agenKeys)}
-                className="inline-flex items-center gap-1 text-xs px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-md border border-slate-700 transition-colors cursor-pointer"
+                className="inline-flex items-center gap-1 text-xs px-2.5 py-1.5 bg-white hover:bg-slate-50 text-slate-500 rounded-md border border-[#E2E8F0] transition-colors cursor-pointer"
               >
                 <FolderClosed className="w-3.5 h-3.5" /> Sembunyikan
               </button>
               <button
                 onClick={expandAll}
-                className="inline-flex items-center gap-1 text-xs px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-md border border-slate-700 transition-colors cursor-pointer"
+                className="inline-flex items-center gap-1 text-xs px-2.5 py-1.5 bg-white hover:bg-slate-50 text-slate-500 rounded-md border border-[#E2E8F0] transition-colors cursor-pointer"
               >
                 <FolderOpen className="w-3.5 h-3.5" /> Tampilkan
               </button>
@@ -180,19 +180,19 @@ export default function BaggingPage() {
             const copied = copiedAgen === agenName;
 
             return (
-              <div key={agenName} className="bg-slate-900/70 rounded-xl border border-slate-800/80 overflow-hidden">
-                <div className="flex items-center justify-between p-4 border-b border-slate-800/60">
+              <div key={agenName} className="bg-white rounded-xl border border-[#E2E8F0] overflow-hidden shadow-sm">
+                <div className="flex items-center justify-between p-4 border-b border-[#E2E8F0]">
                   <button
                     onClick={() => toggleCollapse(agenName)}
                     className="flex items-center gap-2 text-left cursor-pointer group"
                   >
                     {collapsed ? (
-                      <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-white transition-colors" />
+                      <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-slate-600 transition-colors" />
                     ) : (
-                      <ChevronDown className="w-4 h-4 text-slate-400 group-hover:text-white transition-colors" />
+                      <ChevronDown className="w-4 h-4 text-slate-400 group-hover:text-slate-600 transition-colors" />
                     )}
-                    <span className="text-sm font-semibold text-white">{agenName}</span>
-                    <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                    <span className="text-sm font-semibold text-slate-800">{agenName}</span>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-600 border border-amber-200">
                       {items.length} paket
                     </span>
                   </button>
@@ -201,8 +201,8 @@ export default function BaggingPage() {
                       onClick={() => handleCopy(msg, agenName)}
                       className={`inline-flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-md border transition-colors cursor-pointer ${
                         copied
-                          ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
-                          : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'
+                          ? 'bg-emerald-50 text-emerald-600 border-emerald-200'
+                          : 'bg-white hover:bg-slate-50 text-slate-600 border-[#E2E8F0]'
                       }`}
                     >
                       {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
@@ -221,12 +221,12 @@ export default function BaggingPage() {
 
                 {!collapsed && (
                   <div className="p-4 space-y-3">
-                    <pre className="bg-slate-950 p-3 rounded-lg border border-slate-800 text-xs font-mono text-emerald-400 whitespace-pre-wrap max-h-40 overflow-y-auto">
+                    <pre className="bg-slate-50 p-3 rounded-lg border border-[#E2E8F0] text-xs font-mono text-emerald-600 whitespace-pre-wrap max-h-40 overflow-y-auto">
                       {msg}
                     </pre>
-                    <div className="overflow-x-auto rounded-lg border border-slate-800">
+                    <div className="overflow-x-auto rounded-lg border border-[#E2E8F0]">
                       <table className="w-full text-left text-[11px]">
-                        <thead className="bg-slate-950 text-slate-400 uppercase">
+                        <thead className="bg-slate-50 text-slate-400 uppercase">
                           <tr>
                             <th className="p-2.5">Tanggal</th>
                             <th className="p-2.5">No Resi</th>
@@ -234,13 +234,13 @@ export default function BaggingPage() {
                             <th className="p-2.5">Status</th>
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-slate-800/50 text-slate-300">
+                        <tbody className="divide-y divide-[#E2E8F0] text-slate-600">
                           {items.map((row, idx) => (
-                            <tr key={idx} className="hover:bg-slate-800/20 transition-colors">
+                            <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
                               <td className="p-2.5">{formatDateDDMMYYYY(row['Tanggal'])}</td>
-                              <td className="p-2.5 font-mono font-semibold text-blue-400">{String(row['No Resi'] || '-')}</td>
+                              <td className="p-2.5 font-mono font-semibold text-blue-600">{String(row['No Resi'] || '-')}</td>
                               <td className="p-2.5">{String(row['Kode Layanan'] || '-')}</td>
-                              <td className="p-2.5 text-amber-400 font-medium">{String(row['Status Bagging'] || '-')}</td>
+                              <td className="p-2.5 text-amber-600 font-medium">{String(row['Status Bagging'] || '-')}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -256,7 +256,7 @@ export default function BaggingPage() {
         <EmptyState
           title="Upload file Excel"
           description="Unggah file Excel KurLog (.xlsx) untuk melihat draft pengingat bagging per agen."
-          icon={<Upload className="w-8 h-8 text-slate-500" />}
+          icon={<Upload className="w-8 h-8 text-slate-300" />}
         />
       )}
     </main>

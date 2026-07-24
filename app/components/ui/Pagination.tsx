@@ -54,13 +54,13 @@ export default function Pagination({
   return (
     <div className="flex items-center justify-between px-1 py-3 text-xs">
       <div className="flex items-center gap-3">
-        <span className="text-slate-500">
+        <span className="text-slate-400">
           Menampilkan {startItem}–{endItem} dari {totalItems}
         </span>
         <select
           value={pageSize}
           onChange={(e) => onPageSizeChange(Number(e.target.value) as PageSize)}
-          className="bg-slate-800 border border-slate-700 text-slate-300 text-xs rounded-lg px-2 py-1 cursor-pointer focus:outline-none focus:ring-1 focus:ring-blue-500"
+          className="bg-white border border-[#E2E8F0] text-slate-600 text-xs rounded-lg px-2 py-1 cursor-pointer focus:outline-none focus:ring-1 focus:ring-blue-500"
         >
           {PAGE_SIZE_OPTIONS.map((size) => (
             <option key={size} value={size}>
@@ -73,20 +73,20 @@ export default function Pagination({
         <button
           onClick={() => onGoTo(1)}
           disabled={!hasPrev}
-          className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-slate-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
+          className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
         >
           <ChevronsLeft className="w-4 h-4" />
         </button>
         <button
           onClick={onPrev}
           disabled={!hasPrev}
-          className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-slate-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
+          className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
         >
           <ChevronLeft className="w-4 h-4" />
         </button>
         {pages.map((page, i) =>
           page === '...' ? (
-            <span key={`dots-${i}`} className="px-1 text-slate-600">
+            <span key={`dots-${i}`} className="px-1 text-slate-300">
               ...
             </span>
           ) : (
@@ -95,8 +95,8 @@ export default function Pagination({
               onClick={() => onGoTo(page)}
               className={`min-w-[28px] h-7 px-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
                 currentPage === page
-                  ? 'bg-blue-600 text-white'
-                  : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'
+                  ? 'bg-[#1E293B] text-white'
+                  : 'text-slate-500 hover:bg-slate-100 hover:text-slate-700'
               }`}
             >
               {page}
@@ -106,14 +106,14 @@ export default function Pagination({
         <button
           onClick={onNext}
           disabled={!hasNext}
-          className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-slate-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
+          className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
         >
           <ChevronRight className="w-4 h-4" />
         </button>
         <button
           onClick={() => onGoTo(totalPages)}
           disabled={!hasNext}
-          className="p-1.5 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-slate-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
+          className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
         >
           <ChevronsRight className="w-4 h-4" />
         </button>

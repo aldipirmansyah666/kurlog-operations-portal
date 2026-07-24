@@ -24,9 +24,7 @@ export function useResi() {
   }, [fetchResi]);
 
   useEffect(() => {
-    let channel: RealtimeChannel;
-
-    channel = supabase
+    const channel: RealtimeChannel = supabase
       .channel('resi-changes')
       .on(
         'postgres_changes',

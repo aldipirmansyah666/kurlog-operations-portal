@@ -71,12 +71,12 @@ export default function PasteImportModal({ open, onClose, onSubmit }: PasteImpor
   return (
     <Modal open={open} onClose={onClose} title="Import Resi dari Spreadsheet" maxWidth="max-w-2xl">
       <div className="space-y-4">
-        <div className="bg-slate-950 border border-slate-800 rounded-lg p-3 text-xs text-slate-400 space-y-1">
-          <p className="font-medium text-slate-200">Format 6 kolom (tab-separated):</p>
-          <p className="font-mono text-amber-400">
+        <div className="bg-slate-50 border border-[#E2E8F0] rounded-lg p-3 text-xs text-slate-500 space-y-1">
+          <p className="font-medium text-slate-700">Format 6 kolom (tab-separated):</p>
+          <p className="font-mono text-amber-600">
             Tgl Tiket | No. Resi | Nama Agen | Layanan | Petugas | Status
           </p>
-          <p className="text-slate-500">Atau 5 kolom (tanpa tanggal — otomatis pakai hari ini).</p>
+          <p className="text-slate-400">Atau 5 kolom (tanpa tanggal — otomatis pakai hari ini).</p>
         </div>
 
         <textarea
@@ -84,13 +84,13 @@ export default function PasteImportModal({ open, onClose, onSubmit }: PasteImpor
           placeholder={`21/07/2026\tP2604210156486\tMUC SWEET\tPKH\tNoviaCC\tPERJALANAN\n21/07/2026\tP2605110091369\tMUC NDH\tPE\tianCC\tDELIVERED`}
           value={pasteData}
           onChange={(e) => setPasteData(e.target.value)}
-          className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 text-xs font-mono text-slate-200 focus:outline-none focus:border-blue-500 transition-colors resize-none placeholder:text-slate-600"
+          className="w-full bg-slate-50 border border-[#E2E8F0] rounded-lg p-3 text-xs font-mono text-slate-700 focus:outline-none focus:border-blue-500 transition-colors resize-none placeholder:text-slate-300"
         />
 
-        <div className="flex justify-end gap-2 pt-2 border-t border-slate-800/80">
+        <div className="flex justify-end gap-2 pt-2 border-t border-[#E2E8F0]">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-sm font-medium text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg transition-colors cursor-pointer"
+            className="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-800 bg-white hover:bg-slate-50 border border-[#E2E8F0] rounded-lg transition-colors cursor-pointer"
           >
             Batal
           </button>

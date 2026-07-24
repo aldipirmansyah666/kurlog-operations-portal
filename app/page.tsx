@@ -10,17 +10,15 @@ import StatCard from '@/app/components/ui/StatCard';
 import ToastContainer from '@/app/components/ui/Toast';
 import ConfirmDialog from '@/app/components/ui/ConfirmDialog';
 import Pagination from '@/app/components/ui/Pagination';
-import { StatCardSkeleton, ChartSkeleton } from '@/app/components/ui/LoadingSkeleton';
+import { StatCardSkeleton } from '@/app/components/ui/LoadingSkeleton';
 import EmptyState from '@/app/components/ui/EmptyState';
 import ResiForm from '@/app/components/resi/ResiForm';
 import ResiTable from '@/app/components/resi/ResiTable';
 import FollowUpModal from '@/app/components/resi/FollowUpModal';
 import PasteImportModal from '@/app/components/resi/PasteImportModal';
-import { StatusPieChart, TopAgenBarChart } from '@/app/components/resi/Charts';
 import SearchBar from '@/app/components/resi/SearchBar';
-import { isClosedStatus } from '@/lib/constants';
 import type { ResiItem } from '@/lib/types';
-import { PackageSearch, CheckCircle2, Clock, Trash } from 'lucide-react';
+import { PackageSearch, CheckCircle2, Clock, AlertTriangle } from 'lucide-react';
 
 export default function Home() {
   const { resiList, loading, totalCount, needFUCount, doneCount, addResi, addResiBatch, updateStatus, addNote, updateNote, deleteResi, deleteAllResi, deleteResiBatch } = useResi();
@@ -28,13 +26,16 @@ export default function Home() {
   const pagination = usePagination(filters.filteredResi);
   const { toasts, showToast, removeToast } = useToast();
 
-  const [submitting, setSubmitting] = useState(false);
+  const submitting = false;
   const [followUpResi, setFollowUpResi] = useState<ResiItem | null>(null);
   const [showPasteModal, setShowPasteModal] = useState(false);
   const [showDeleteAll, setShowDeleteAll] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [showDeleteSelected, setShowDeleteSelected] = useState(false);
+
+  const deliveredCount = resiList.filter((i) => i.status_resi.toUpperCase() === 'DELIVERED').length;
+  const returCount = resiList.filter((i) => i.status_resi.toUpperCase() === 'RETUR').length;
 
   const handleToggleSelect = useCallback((id: number) => {
     setSelectedIds((prev) => {
@@ -138,8 +139,8 @@ export default function Home() {
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <h1 className="text-lg font-semibold text-white flex items-center gap-2">
-              <PackageSearch className="w-5 h-5 text-blue-400" />
+            <h1 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
+              <PackageSearch className="w-5 h-5 text-blue-500" />
               Monitoring Resi
             </h1>
             <p className="text-xs text-slate-400 mt-0.5">
@@ -149,14 +150,14 @@ export default function Home() {
           <div className="flex items-center gap-2">
             <button
               onClick={() => setShowDeleteAll(true)}
-              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-rose-400 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 rounded-lg transition-colors cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-rose-500 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-lg transition-colors cursor-pointer"
             >
               <Trash2 className="w-3.5 h-3.5" />
               Hapus Semua
             </button>
             <button
               onClick={() => setShowPasteModal(true)}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium text-white bg-emerald-600 hover:bg-emerald-500 rounded-lg transition-colors cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium text-white bg-[#1E293B] hover:bg-slate-700 rounded-lg transition-colors cursor-pointer"
             >
               <ClipboardPaste className="w-3.5 h-3.5" />
               Import Excel
@@ -164,34 +165,21 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Stat Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {/* Stat Cards - 4 Executive KPIs */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {loading ? (
             <>
+              <StatCardSkeleton />
               <StatCardSkeleton />
               <StatCardSkeleton />
               <StatCardSkeleton />
             </>
           ) : (
             <>
-              <StatCard label="Total Tiket" value={totalCount} icon={<FileText className="w-5 h-5" />} />
+              <StatCard label="Total Resi" value={totalCount} icon={<FileText className="w-5 h-5" />} />
               <StatCard label="Perlu Follow Up" value={needFUCount} icon={<Clock className="w-5 h-5" />} variant="warning" />
-              <StatCard label="Closed" value={doneCount} icon={<CheckCircle2 className="w-5 h-5" />} variant="success" />
-            </>
-          )}
-        </div>
-
-        {/* Charts */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {loading ? (
-            <>
-              <ChartSkeleton />
-              <ChartSkeleton />
-            </>
-          ) : (
-            <>
-              <StatusPieChart data={filters.statusChartData} />
-              <TopAgenBarChart data={filters.topAgenChartData} />
+              <StatCard label="Delivered" value={deliveredCount} icon={<CheckCircle2 className="w-5 h-5" />} variant="success" />
+              <StatCard label="Retur" value={returCount} icon={<AlertTriangle className="w-5 h-5" />} variant="danger" />
             </>
           )}
         </div>
@@ -219,14 +207,14 @@ export default function Home() {
 
         {/* Data Table */}
         {loading ? (
-          <div className="bg-slate-900/70 rounded-xl border border-slate-800/80 p-12 text-center text-sm text-slate-500">
+          <div className="bg-white rounded-xl border border-[#E2E8F0] p-12 text-center text-sm text-slate-400 shadow-sm">
             Memuat data...
           </div>
         ) : filters.filteredResi.length === 0 ? (
           <EmptyState
             title="Belum ada data resi"
             description="Tambahkan resi baru atau import dari spreadsheet."
-            icon={<PackageSearch className="w-8 h-8 text-slate-500" />}
+            icon={<PackageSearch className="w-8 h-8 text-slate-300" />}
           />
         ) : (
           <>
