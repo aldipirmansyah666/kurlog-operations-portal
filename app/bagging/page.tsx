@@ -19,24 +19,13 @@ import EmptyState from '@/app/components/ui/EmptyState';
 function formatDateDDMMYYYY(value: unknown): string {
   if (!value) return '-';
   let date: Date;
-  if (value instanceof Date) {
-    date = value;
+  if (value instanceof Date || (typeof value === 'object' && value !== null && 'getTime' in value)) {
+    date = value as Date;
   } else if (typeof value === 'number') {
     date = new Date((value - 25569) * 86400 * 1000);
   } else {
-    const str = String(value).trim();
-    const parts = str.split(/[/\-\.]/);
-    if (parts.length === 3) {
-      if (parts[2].length === 4) {
-        date = new Date(+parts[2], +parts[1] - 1, +parts[0]);
-      } else if (parts[0].length === 4) {
-        date = new Date(+parts[0], +parts[1] - 1, +parts[2]);
-      } else {
-        date = new Date(str);
-      }
-    } else {
-      date = new Date(str);
-    }
+    const str = String(value).trim().replaceAll(' ', 'T');
+    date = new Date(str);
   }
   if (isNaN(date.getTime())) return String(value);
   const d = String(date.getDate()).padStart(2, '0');
