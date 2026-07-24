@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import type { ResiItem } from '@/lib/types';
+import type { RealtimeChannel } from '@supabase/supabase-js';
 import { isClosedStatus } from '@/lib/constants';
 
 export function useResi() {
@@ -20,6 +21,25 @@ export function useResi() {
 
   useEffect(() => {
     fetchResi();
+  }, [fetchResi]);
+
+  useEffect(() => {
+    let channel: RealtimeChannel;
+
+    channel = supabase
+      .channel('resi-changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'resi' },
+        () => {
+          fetchResi();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [fetchResi]);
 
   const addResi = useCallback(

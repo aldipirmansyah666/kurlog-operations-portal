@@ -2,11 +2,12 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { PackageSearch, ShoppingBag } from 'lucide-react';
+import { PackageSearch, ShoppingBag, AlertTriangle } from 'lucide-react';
 
 const NAV_ITEMS = [
   { href: '/', label: 'Monitoring Resi', icon: PackageSearch },
   { href: '/bagging', label: 'Otomasi Bagging', icon: ShoppingBag },
+  { href: '/bailout', label: 'Informasi Bailout', icon: AlertTriangle },
 ];
 
 export default function Navbar() {

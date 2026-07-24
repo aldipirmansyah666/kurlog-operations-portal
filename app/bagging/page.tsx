@@ -16,6 +16,35 @@ import {
 import type { BaggingRow } from '@/lib/types';
 import EmptyState from '@/app/components/ui/EmptyState';
 
+function formatDateDDMMYYYY(value: unknown): string {
+  if (!value) return '-';
+  let date: Date;
+  if (value instanceof Date) {
+    date = value;
+  } else if (typeof value === 'number') {
+    date = new Date((value - 25569) * 86400 * 1000);
+  } else {
+    const str = String(value).trim();
+    const parts = str.split(/[/\-\.]/);
+    if (parts.length === 3) {
+      if (parts[2].length === 4) {
+        date = new Date(+parts[2], +parts[1] - 1, +parts[0]);
+      } else if (parts[0].length === 4) {
+        date = new Date(+parts[0], +parts[1] - 1, +parts[2]);
+      } else {
+        date = new Date(str);
+      }
+    } else {
+      date = new Date(str);
+    }
+  }
+  if (isNaN(date.getTime())) return String(value);
+  const d = String(date.getDate()).padStart(2, '0');
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const y = date.getFullYear();
+  return `${d}/${m}/${y}`;
+}
+
 export default function BaggingPage() {
   const [baggingData, setBaggingData] = useState<BaggingRow[]>([]);
   const [isProcessingExcel, setIsProcessingExcel] = useState(false);
@@ -154,7 +183,7 @@ export default function BaggingPage() {
           {/* Agen Cards */}
           {agenKeys.map((agenName) => {
             const items = groupedByAgen[agenName];
-            const sampleDate = items[0]?.['Tanggal'] || '-';
+            const sampleDate = formatDateDDMMYYYY(items[0]?.['Tanggal']);
             const resiListStr = items.map((i) => i['No Resi']).join('\n');
             const msg = `Selamat pagi pak, mohon maaf mengganggu waktunya pak, kami sampaikan ada paket di agen bapak ${agenName} pada Tanggal ${sampleDate} yang belum dibagging ya pak?\nMohon dibantu untuk segera dibagging.\n\nBerikut informasi resinya :\n${resiListStr}`;
             const waUrl = `https://web.whatsapp.com/send?text=${encodeURIComponent(msg)}`;
@@ -219,7 +248,7 @@ export default function BaggingPage() {
                         <tbody className="divide-y divide-slate-800/50 text-slate-300">
                           {items.map((row, idx) => (
                             <tr key={idx} className="hover:bg-slate-800/20 transition-colors">
-                              <td className="p-2.5">{String(row['Tanggal'] || '-')}</td>
+                              <td className="p-2.5">{formatDateDDMMYYYY(row['Tanggal'])}</td>
                               <td className="p-2.5 font-mono font-semibold text-blue-400">{String(row['No Resi'] || '-')}</td>
                               <td className="p-2.5">{String(row['Kode Layanan'] || '-')}</td>
                               <td className="p-2.5 text-amber-400 font-medium">{String(row['Status Bagging'] || '-')}</td>

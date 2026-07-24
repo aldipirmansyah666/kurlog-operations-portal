@@ -31,3 +31,10 @@ export interface BaggingRow {
   'Status Bagging'?: string;
   [key: string]: unknown;
 }
+
+export interface BailoutRow {
+  'KODE'?: string;
+  'NAMA'?: string;
+  'BAILOUT'?: number | string;
+  [key: string]: unknown;
+}

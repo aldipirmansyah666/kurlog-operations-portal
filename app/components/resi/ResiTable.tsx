@@ -9,6 +9,13 @@ function getFUCount(catatan?: string) {
   return catatan.trim().split('\n').filter((line) => line.trim().length > 0).length;
 }
 
+function getFUStyle(count: number) {
+  if (count === 0) return 'bg-slate-800 text-slate-500 border border-slate-700';
+  if (count === 1) return 'bg-amber-500/10 text-amber-400 border border-amber-500/20';
+  if (count === 2) return 'bg-orange-500/10 text-orange-400 border border-orange-500/20';
+  return 'bg-rose-500/10 text-rose-400 border border-rose-500/20';
+}
+
 interface ResiRowProps {
   item: ResiItem;
   index: number;
@@ -52,11 +59,7 @@ function ResiRow({ item, index, selected, onToggleSelect, onStatusChange, onFoll
       </td>
       <td className="px-4 py-3 text-center">
         <span
-          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold ${
-            fuCount > 0
-              ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
-              : 'bg-slate-800 text-slate-500 border border-slate-700'
-          }`}
+          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold ${getFUStyle(fuCount)}`}
         >
           <Clock className="w-3 h-3" />
           {fuCount}x

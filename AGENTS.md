@@ -6,7 +6,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 ## Project overview
 
-**KurLog Operations Portal** — internal logistics tool for monitoring shipment receipts ("resi") and automating WhatsApp bagging reminders to agents. UI language is Indonesian (`lang="id"`).
+**KurLog Operations Portal** (`resi-tracker-web` in `package.json`) — internal logistics tool for monitoring shipment receipts ("resi") and automating WhatsApp bagging reminders to agents. UI language is Indonesian (`lang="id"`). Dark theme is hardcoded in `layout.tsx` body classes.
 
 ## Stack
 
@@ -79,5 +79,7 @@ lib/
 - **`xlsx` is heavy** — only imported in `app/bagging/page.tsx`.
 - **Page size options**: 25/100/150 via dropdown in pagination bar. Default 25. Config in `lib/constants.ts` (`PAGE_SIZE_OPTIONS`, `DEFAULT_PAGE_SIZE`).
 - **Row selection**: Checkboxes in table header/body. Selection state lives in `page.tsx` (`selectedIds: Set<number>`), passed down to `ResiTable`.
-- **Status conventions**: `PERJALANAN`, `DELIVERED`, `RETUR`, `HOLD`, `CCH` — these are business terms, not generic.
+- **Status conventions**: `PERJALANAN`, `DELIVERED`, `RETUR`, `HOLD`, `CCH` — these are business terms, not generic. Closed statuses are `DELIVERED` and `RETUR` (see `isClosedStatus()` in `lib/constants.ts`).
+- **Layanan options**: `PE`, `PKH`, `EC3` — defined as `LAYANAN_OPTIONS` in `lib/constants.ts`.
 - **Date format** is `DD/MM/YYYY` (Indonesian locale), not ISO.
+- **Dark theme** is hardcoded: `bg-slate-950 text-slate-100` on `<body>` in `layout.tsx`. No theme toggle.
