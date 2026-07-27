@@ -129,12 +129,14 @@ export default function BailoutPage() {
     setTimeout(() => setCopiedIdx(null), 2000);
   };
 
-  const dateObj = new Date(bailoutDate + 'T00:00:00');
-  const dateStr = isNaN(dateObj.getTime()) ? '-' : formatIDDate(dateObj);
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  const dateStr = formatIDDate(yesterday);
 
   const totalMinus = data.reduce((sum, row) => sum + parseBailoutValue(row['BAILOUT']), 0);
 
-  const isWeekend = !isNaN(dateObj.getTime()) && (dateObj.getDay() === 0 || dateObj.getDay() === 6);
+  const pickerDateObj = new Date(bailoutDate + 'T00:00:00');
+  const isWeekend = !isNaN(pickerDateObj.getTime()) && (pickerDateObj.getDay() === 0 || pickerDateObj.getDay() === 6);
 
   const WEEKEND_EXCLUDED_AGENTS = ['TRINERGI UTAMA JAYA'];
 
