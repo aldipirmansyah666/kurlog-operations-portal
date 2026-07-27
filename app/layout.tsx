@@ -1,6 +1,5 @@
 import './globals.css';
-import Navbar from './components/layout/Navbar';
-import Footer from './components/layout/Footer';
+import LayoutShell from './components/layout/LayoutShell';
 import { Inter, JetBrains_Mono } from 'next/font/google';
 
 const inter = Inter({
@@ -14,7 +13,7 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata = {
-  title: 'KurLog Operations Portal',
+  title: 'Cult Portal',
   description: 'Sistem Terpadu Monitoring & Otomasi CS',
 };
 
@@ -26,9 +25,7 @@ export default function RootLayout({
   return (
     <html lang="id">
       <body className={`${inter.variable} ${jetbrainsMono.variable} bg-[#F1F5F9] text-slate-800 min-h-screen flex flex-col font-sans antialiased`}>
-        <Navbar />
-        <main className="flex-1 pb-8">{children}</main>
-        <Footer />
+        <LayoutShell>{children}</LayoutShell>
       </body>
     </html>
   );

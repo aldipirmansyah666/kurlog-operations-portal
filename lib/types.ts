@@ -63,3 +63,14 @@ export interface ExcelValidationResult {
   };
   errors: string[];
 }
+
+export type UserRole = 'ADMIN' | 'USER';
+
+export interface User {
+  id: string;
+  name: string;
+  username: string;
+  password: string;
+  role: UserRole;
+  created_at: string;
+}
