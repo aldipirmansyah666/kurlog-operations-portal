@@ -10,7 +10,7 @@ export default function Footer() {
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
               <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
             </span>
-            Cult Portal
+            Cult Flow
           </div>
           <span className="text-slate-300">&bull;</span>
           <span className="text-slate-400">&copy; 2026 Cult System. All rights reserved.</span>

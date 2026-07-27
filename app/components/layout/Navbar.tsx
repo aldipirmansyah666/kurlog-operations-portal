@@ -46,7 +46,7 @@ export default function Navbar() {
           </div>
           <div className="flex items-center gap-2">
             <span className="text-sm font-semibold text-slate-800 tracking-tight">
-              Cult <span className="text-slate-400 font-normal">Portal</span>
+              Cult <span className="text-slate-400 font-normal">Flow</span>
             </span>
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" title="Online" />
           </div>

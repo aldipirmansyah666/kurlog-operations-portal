@@ -66,7 +66,7 @@ function LoginForm() {
             </div>
           </div>
           <h1 className="text-2xl font-bold text-white tracking-tight">
-            Cult <span className="text-slate-400 font-light">Portal</span>
+            Cult <span className="text-slate-400 font-light">Flow</span>
           </h1>
           <p className="text-[11px] text-slate-500 mt-1.5 tracking-wide uppercase">
             Sistem Operasional Terpadu
@@ -216,7 +216,7 @@ export default function LoginPage() {
 
         {/* Bottom branding */}
         <p className="text-center text-[9px] text-slate-700 mt-6 tracking-widest uppercase">
-          Cult Portal &copy; 2024
+          Cult Flow &copy; 2024
         </p>
       </div>
     </div>

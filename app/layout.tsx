@@ -13,7 +13,7 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata = {
-  title: 'Cult Portal',
+  title: 'Cult Flow',
   description: 'Sistem Terpadu Monitoring & Otomasi CS',
 };
 
