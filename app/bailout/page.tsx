@@ -136,10 +136,43 @@ export default function BailoutPage() {
 
   const isWeekend = !isNaN(dateObj.getTime()) && (dateObj.getDay() === 0 || dateObj.getDay() === 6);
 
-  const buildMessage = (nama: string, amount: number): string => {
-    const header = `Assalamu'alaikum Warahmatullahi Wabarakatuh,\nDear ${nama}\n\nBerikut kami sampaikan minus pada tanggal ${dateStr} sebesar ${formatIDCurrency(amount)}`;
+  const WEEKEND_EXCLUDED_AGENTS = ['TRINERGI UTAMA JAYA'];
 
-    if (isWeekend) {
+  const AGENT_DISPLAY_NAMES: Record<string, string> = {
+    'CV. MITRA PERDANA INDONESIA (MPI)': 'Kang Diwa & Mas Endi',
+    'CV. ANEKA JASA': 'PT.ANEKA JASA',
+    'CV. DRAGO MULTIMEDIA JASALINDO - DRAGO': 'Kang Deni',
+    'PT. TRINERGI UTAMA JAYA - TUJ': 'Pak Doni & Bu Faradina',
+    'HAFSAH & BROTHERS': 'Team HAFSAH & BROTHERS',
+    'DIKASA': 'Pak Erwin',
+    'MAJU BERSAMA SUMBAWA (MBS)': 'MAJU BERSAMA SUMBAWA (MBS)',
+    'HAIFA': 'Bang Hairul',
+    'LOMBOQ TATAS': 'Team LOMBOQ TATAS',
+    'REJEKI UNTUK ANAK (RUA)': 'Pak Eko & Bu Nita',
+    'AGUSONO': 'Pak Agusono',
+    'BMAX CPY': 'Pak Arif',
+    'TEGAR MANDIRI': 'Team Tegar Mandiri',
+    'PT. TRINERGI UTAMA JAYA - TUJ MBI': 'Mitra MBI',
+    'BERKAH JAYA ELEKTRIK (BJE)': 'Pak Arie dan Bu Puji',
+    'GUNUNGRAYA': 'Mitra Pak Wiroyo',
+    'FAYAZA': 'Bang Mawardi',
+    'ABDUL AJI': 'Pak Abdul Aji',
+    'KANZUL HAKIKI': 'Mitra Kanzul Hakiki',
+    'BSL': 'Pak Maksum',
+    'BERKAH SOFIE': 'Pak Ciptadi',
+  };
+
+  const getDisplayName = (nama: string): string => {
+    return AGENT_DISPLAY_NAMES[nama] || nama;
+  };
+
+  const buildMessage = (nama: string, amount: number): string => {
+    const displayName = getDisplayName(nama);
+    const header = `Assalamu'alaikum Warahmatullahi Wabarakatuh,\nDear ${displayName}\n\nBerikut kami sampaikan minus pada tanggal ${dateStr} sebesar ${formatIDCurrency(amount)}`;
+
+    const isExcluded = WEEKEND_EXCLUDED_AGENTS.some((agent) => nama.toUpperCase().includes(agent.toUpperCase()));
+
+    if (isWeekend && !isExcluded) {
       return `${header}\n\nMohon bantuan pelimpahannya (setor ke bank jika memungkinkan atau via internet banking) untuk menghindari penumpukan di hari Senin.\n\nHatur Nuhun 🙏\nSemoga kita semua selalu di berikan kesehatan & selalu dalam lindunganNya..\nAamiin`;
     }
 
