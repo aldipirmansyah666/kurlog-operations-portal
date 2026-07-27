@@ -38,3 +38,28 @@ export interface BailoutRow {
   'BAILOUT'?: number | string;
   [key: string]: unknown;
 }
+
+export interface ReconcileRow {
+  produk: string;
+  nomor_resi: string;
+  [key: string]: unknown;
+}
+
+export interface ValidatedReconcileRow extends ReconcileRow {
+  isValid: boolean;
+  reason: string;
+  rowIndex: number;
+}
+
+export interface ExcelValidationResult {
+  isFileValid: boolean;
+  isEC3Valid: boolean;
+  isPKHValid: boolean;
+  details: {
+    ec3_shpe: boolean;
+    ec3_p260: boolean;
+    pkh_p260: boolean;
+    pkh_ttspos: boolean;
+  };
+  errors: string[];
+}
