@@ -134,8 +134,16 @@ export default function BailoutPage() {
 
   const totalMinus = data.reduce((sum, row) => sum + parseBailoutValue(row['BAILOUT']), 0);
 
+  const isWeekend = !isNaN(dateObj.getTime()) && (dateObj.getDay() === 0 || dateObj.getDay() === 6);
+
   const buildMessage = (nama: string, amount: number): string => {
-    return `Assalamu'alaikum Warahmatullahi Wabarakatuh,\nDear ${nama}\n\nBerikut kami sampaikan minus pada tanggal ${dateStr} minusnya sebesar ${formatIDCurrency(amount)}\n\nMohon bantuan pelimpahannya sebelum pukul 09.00 WIB.\n\t\nHatur Nuhun 🙏\nSemoga kita semua selalu di berikan kesehatan & selalu dalam lindunganNya.\nAamiin`;
+    const header = `Assalamu'alaikum Warahmatullahi Wabarakatuh,\nDear ${nama}\n\nBerikut kami sampaikan minus pada tanggal ${dateStr} sebesar ${formatIDCurrency(amount)}`;
+
+    if (isWeekend) {
+      return `${header}\n\nMohon bantuan pelimpahannya (setor ke bank jika memungkinkan atau via internet banking) untuk menghindari penumpukan di hari Senin.\n\nHatur Nuhun 🙏\nSemoga kita semua selalu di berikan kesehatan & selalu dalam lindunganNya..\nAamiin`;
+    }
+
+    return `${header}\n\nMohon bantuan pelimpahannya sebelum pukul 09.00 WIB.\n\nHatur Nuhun 🙏\nSemoga kita semua selalu di berikan kesehatan & selalu dalam lindunganNya.\nAamiin`;
   };
 
   return (
@@ -184,7 +192,7 @@ export default function BailoutPage() {
               className="block w-full text-xs text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-medium file:bg-[#1E293B] file:text-white hover:file:bg-slate-700 file:cursor-pointer bg-slate-50 p-2 rounded-lg border border-[#E2E8F0] cursor-pointer"
             />
             <div className="flex items-center gap-2">
-              <label className="text-xs text-slate-400 whitespace-nowrap">Tanggal Minus:</label>
+              <label className="text-xs text-slate-400 whitespace-nowrap">Tanggal Redaksi:</label>
               <input
                 type="date"
                 value={bailoutDate}
@@ -211,7 +219,7 @@ export default function BailoutPage() {
                 <ClipboardPaste className="w-3.5 h-3.5" /> Proses Data
               </button>
               <div className="flex items-center gap-2">
-                <label className="text-xs text-slate-400 whitespace-nowrap">Tanggal Minus:</label>
+                <label className="text-xs text-slate-400 whitespace-nowrap">Tanggal Redaksi:</label>
                 <input
                   type="date"
                   value={bailoutDate}
