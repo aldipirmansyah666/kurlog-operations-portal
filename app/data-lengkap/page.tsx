@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useRef } from 'react';
-import { Plus, FileDown, FileUp, Search, Trash2, Pencil, Database, X, Download } from 'lucide-react';
+import { Plus, FileUp, Search, Trash2, Pencil, Database, X, Download } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { useDataLengkap } from '@/lib/hooks/useDataLengkap';
 import DataLengkapForm from '@/app/components/data-lengkap/DataLengkapForm';
@@ -11,85 +11,14 @@ import ConfirmDialog from '@/app/components/ui/ConfirmDialog';
 import { useToast } from '@/lib/hooks/useToast';
 import type { DataLengkapItem } from '@/lib/types';
 
-const COLUMNS: { key: keyof DataLengkapItem; label: string; group: string; width: string }[] = [
-  { key: 'no', label: 'NO', group: 'A', width: 'w-14' },
-  { key: 'tglPendaftaran', label: 'TGL PENDAFTARAN', group: 'A', width: 'w-36' },
-  { key: 'statusKurlog', label: 'STATUS KURLOG', group: 'A', width: 'w-28' },
-  { key: 'ppid', label: 'PPID', group: 'A', width: 'w-28' },
-  { key: 'namaLoketOnpays', label: 'NAMA LOKET ONPAYS', group: 'A', width: 'w-44' },
-  { key: 'namaLoketKurlog', label: 'NAMA LOKET KURLOG', group: 'A', width: 'w-44' },
-  { key: 'locationId', label: 'LOCATION ID', group: 'A', width: 'w-28' },
-  { key: 'userMile', label: 'USER MILE', group: 'A', width: 'w-28' },
-  { key: 'passwordMile', label: 'PASSWORD MILE', group: 'A', width: 'w-28' },
-  { key: 'regional', label: 'REGIONAL', group: 'A', width: 'w-28' },
-  { key: 'kcuKc', label: 'KCU/KC', group: 'A', width: 'w-28' },
-  { key: 'namaPemilik', label: 'NAMA PEMILIK', group: 'B', width: 'w-36' },
-  { key: 'noKtp', label: 'NO KTP', group: 'B', width: 'w-36' },
-  { key: 'noNpwp', label: 'NO NPWP', group: 'B', width: 'w-36' },
-  { key: 'noHpPemilik', label: 'NO HP PEMILIK', group: 'B', width: 'w-28' },
-  { key: 'noHpLoket', label: 'NO HP LOKET', group: 'B', width: 'w-28' },
-  { key: 'email', label: 'EMAIL', group: 'B', width: 'w-40' },
-  { key: 'noDirian', label: 'NO DIRIAN', group: 'B', width: 'w-28' },
-  { key: 'nib', label: 'NIB', group: 'B', width: 'w-36' },
-  { key: 'noKbli', label: 'NO KBLI', group: 'B', width: 'w-28' },
-  { key: 'alamatPemilikKtp', label: 'ALAMAT PEMILIK (KTP)', group: 'B', width: 'w-56' },
-  { key: 'alamatLengkapLoket', label: 'ALAMAT LENGKAP LOKET', group: 'C', width: 'w-56' },
-  { key: 'rtRw', label: 'RT/RW', group: 'C', width: 'w-20' },
-  { key: 'kelDesa', label: 'KEL/DESA', group: 'C', width: 'w-28' },
-  { key: 'kec', label: 'KEC', group: 'C', width: 'w-28' },
-  { key: 'kabKota', label: 'KAB/KOTA', group: 'C', width: 'w-28' },
-  { key: 'propinsi', label: 'PROPINSI', group: 'C', width: 'w-28' },
-  { key: 'kodePos', label: 'KODE POS', group: 'C', width: 'w-20' },
-  { key: 'electricArea', label: 'ELECTRIC AREA', group: 'C', width: 'w-28' },
-  { key: 'rekomendasi', label: 'REKOMENDASI', group: 'C', width: 'w-28' },
-  { key: 'latitude', label: 'LATITUDE', group: 'C', width: 'w-28' },
-  { key: 'longitude', label: 'LONGITUDE', group: 'C', width: 'w-28' },
-  { key: 'nomorRekening', label: 'NO REKENING', group: 'D', width: 'w-36' },
-  { key: 'namaBank', label: 'NAMA BANK', group: 'D', width: 'w-28' },
-  { key: 'namaPemilikRekening', label: 'NAMA PEMILIK REKENING', group: 'D', width: 'w-36' },
-  { key: 'syarat', label: 'SYARAT', group: 'E', width: 'w-28' },
-  { key: 'pengajuanSurveyKePos', label: 'PENGAJUAN SURVEY KE POS', group: 'E', width: 'w-36' },
-  { key: 'pengajuanPos', label: 'PENGAJUAN POS', group: 'E', width: 'w-28' },
-  { key: 'pendaftaranKurlog', label: 'PENDAFTARAN KURLOG', group: 'E', width: 'w-32' },
-  { key: 'kelengkapanPerangkat', label: 'KELENGKAPAN PERANGKAT', group: 'E', width: 'w-36' },
-  { key: 'aktivasiKurlog', label: 'AKTIVASI KURLOG', group: 'E', width: 'w-28' },
-  { key: 'aktivasiSicepat', label: 'AKTIVASI SICEPAT', group: 'E', width: 'w-28' },
-  { key: 'training', label: 'TRAINING', group: 'E', width: 'w-24' },
-  { key: 'transaksi', label: 'TRANSAKSI', group: 'E', width: 'w-24' },
-  { key: 'posPpob', label: 'POS + PPOB', group: 'F', width: 'w-20' },
-  { key: 'posOnly', label: 'POS ONLY', group: 'F', width: 'w-20' },
-  { key: 'sicepat', label: 'SICEPAT', group: 'F', width: 'w-20' },
-  { key: 'catatan', label: 'CATATAN', group: 'F', width: 'w-48' },
-  { key: 'waktuUpdate', label: 'WAKTU UPDATE', group: 'F', width: 'w-36' },
+const COLUMNS: { key: keyof DataLengkapItem; label: string; width: string }[] = [
+  { key: 'ppid', label: 'PID', width: 'w-32' },
+  { key: 'namaLoketKurlog', label: 'NAMA LOKET DI KURLOG', width: 'w-48' },
+  { key: 'noHpLoket', label: 'NO.HP LOKET', width: 'w-32' },
+  { key: 'email', label: 'EMAIL', width: 'w-48' },
+  { key: 'userMile', label: 'USER MILE', width: 'w-28' },
+  { key: 'passwordMile', label: 'PASSWORD MILE', width: 'w-28' },
 ];
-
-const GROUP_LABELS: Record<string, string> = {
-  A: 'Identitas Utama & Logistik',
-  B: 'Pemilik & Legalitas',
-  C: 'Alamat & Lokasi',
-  D: 'Rekening Bank',
-  E: 'Progress & Aktivasi',
-  F: 'Kategori & Catatan',
-};
-
-function StatusBadge({ value, type }: { value: string; type?: 'aktivasi' | 'survey' | 'syarat' | 'lengkap' | 'suda' }) {
-  if (!value) return <span className="text-slate-600">-</span>;
-
-  let color: string;
-  if (value === 'AKTIF' || value === 'LENGKAP' || value === 'SUDAH') {
-    color = 'bg-emerald-900/40 text-emerald-300 border-emerald-700';
-  } else if (value === 'NON AKTIF' || value === 'BELUM LENGKAP' || value === 'BELUM' || value === 'SUSPEND') {
-    color = 'bg-rose-900/40 text-rose-300 border-rose-700';
-  } else {
-    color = 'bg-blue-900/40 text-blue-300 border-blue-700';
-  }
-
-  return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border ${color} uppercase tracking-wide`}>
-      {value}
-    </span>
-  );
-}
 
 function CellValue({ value }: { value: string | number | boolean | undefined }) {
   if (value === undefined || value === null || value === '') {
@@ -99,7 +28,7 @@ function CellValue({ value }: { value: string | number | boolean | undefined }) 
 }
 
 export default function DataLengkapPage() {
-  const { data, addItem, updateItem, deleteItem, importItems, clearAll } = useDataLengkap();
+  const { data, loading, addItem, updateItem, deleteItem, importItems, clearAll } = useDataLengkap();
   const { toasts, showToast, removeToast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -113,16 +42,16 @@ export default function DataLengkapPage() {
     if (!searchQuery.trim()) return data;
     const q = searchQuery.toLowerCase();
     return data.filter((item) =>
-      [item.namaLoketOnpays, item.ppid, item.locationId, item.namaPemilik, item.noHpPemilik, item.noHpLoket, item.namaLoketKurlog]
+      [item.ppid, item.namaLoketKurlog, item.noHpLoket, item.email, item.userMile]
         .some((field) => field?.toLowerCase().includes(q))
     );
   }, [data, searchQuery]);
 
   const nextNo = useMemo(() => (data.length > 0 ? Math.max(...data.map((i) => i.no)) + 1 : 1), [data]);
 
-  const handleAdd = (formData: DataLengkapItem) => {
+  const handleAdd = async (formData: DataLengkapItem) => {
     try {
-      addItem(formData);
+      await addItem(formData);
       showToast('Data loket berhasil ditambahkan', 'success');
       setShowForm(false);
     } catch {
@@ -130,9 +59,19 @@ export default function DataLengkapPage() {
     }
   };
 
-  const handleUpdate = (formData: DataLengkapItem) => {
+  const handleSaveBatch = async (items: DataLengkapItem[]) => {
     try {
-      updateItem(formData.id, formData);
+      await importItems(items);
+      showToast(`Berhasil menyimpan ${items.length} data loket`, 'success');
+      setShowForm(false);
+    } catch {
+      showToast('Gagal menyimpan data', 'error');
+    }
+  };
+
+  const handleUpdate = async (formData: DataLengkapItem) => {
+    try {
+      await updateItem(formData.id, formData);
       showToast('Data loket berhasil diperbarui', 'success');
       setShowForm(false);
       setEditItem(null);
@@ -141,10 +80,10 @@ export default function DataLengkapPage() {
     }
   };
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (!deleteTarget) return;
     try {
-      deleteItem(deleteTarget);
+      await deleteItem(deleteTarget);
       showToast('Data loket berhasil dihapus', 'success');
     } catch {
       showToast('Gagal menghapus data', 'error');
@@ -152,10 +91,14 @@ export default function DataLengkapPage() {
     setDeleteTarget(null);
   };
 
-  const handleClearAll = () => {
-    clearAll();
-    showToast('Semua data berhasil dihapus', 'success');
-    setShowClearAll(false);
+  const handleClearAll = async () => {
+    try {
+      await clearAll();
+      showToast('Semua data berhasil dihapus', 'success');
+      setShowClearAll(false);
+    } catch {
+      showToast('Gagal menghapus data', 'error');
+    }
   };
 
   const handleEdit = (item: DataLengkapItem) => {
@@ -183,7 +126,7 @@ export default function DataLengkapPage() {
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = (evt) => {
+    reader.onload = async (evt) => {
       try {
         const wb = XLSX.read(evt.target?.result, { type: 'binary' });
         const wsname = wb.SheetNames[0];
@@ -212,7 +155,7 @@ export default function DataLengkapPage() {
           imported.push(obj as unknown as Omit<DataLengkapItem, 'id' | 'no' | 'waktuUpdate'>);
         }
 
-        importItems(imported);
+        await importItems(imported);
         showToast(`Berhasil mengimport ${imported.length} data`, 'success');
       } catch {
         showToast('Gagal membaca file Excel', 'error');
@@ -238,7 +181,7 @@ export default function DataLengkapPage() {
                 Data Lengkap Loket &amp; Agen
               </h1>
               <p className="text-xs text-slate-500 mt-0.5">
-                Pencatatan detail legalitas, koordinat, registrasi, dan status aktivasi loket KurLog.
+                Data akses loket KurLog — PPID, nama loket, kontak, dan kredensial Mile.
               </p>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
@@ -283,7 +226,7 @@ export default function DataLengkapPage() {
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Cari Nama Loket, PPID, Location ID, Nama Pemilik, No HP..."
+              placeholder="Cari PPID, Nama Loket, No HP, Email, User Mile..."
               className="w-full bg-slate-800 border border-slate-700 rounded-xl pl-10 pr-4 py-2.5 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
             />
             {searchQuery && (
@@ -307,7 +250,12 @@ export default function DataLengkapPage() {
           </div>
 
           {/* Table */}
-          {data.length === 0 ? (
+          {loading ? (
+            <div className="flex items-center justify-center py-20">
+              <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+              <span className="ml-3 text-sm text-slate-500">Memuat data...</span>
+            </div>
+          ) : data.length === 0 ? (
             <EmptyState
               title="Belum ada data loket"
               description="Klik tombol 'Tambah Data Loket' untuk menambahkan data baru, atau import dari file Excel."
@@ -333,10 +281,7 @@ export default function DataLengkapPage() {
                           key={col.key}
                           className={`sticky top-0 bg-slate-900 z-10 px-3 py-3 text-[10px] font-semibold text-slate-500 uppercase tracking-wider border-r border-slate-800 ${col.width}`}
                         >
-                          <div className="flex flex-col">
-                            <span className="text-[9px] text-slate-600 font-mono">{col.group}</span>
-                            <span className="leading-tight">{col.label}</span>
-                          </div>
+                          {col.label}
                         </th>
                       ))}
                     </tr>
@@ -362,46 +307,11 @@ export default function DataLengkapPage() {
                             </button>
                           </div>
                         </td>
-                        {COLUMNS.map((col) => {
-                          const val = item[col.key];
-                          const isStatus =
-                            col.key === 'statusKurlog' ||
-                            col.key === 'aktivasiKurlog' ||
-                            col.key === 'aktivasiSicepat';
-                          const isProgress =
-                            col.key === 'syarat' ||
-                            col.key === 'pengajuanSurveyKePos' ||
-                            col.key === 'pengajuanPos' ||
-                            col.key === 'pendaftaranKurlog' ||
-                            col.key === 'kelengkapanPerangkat' ||
-                            col.key === 'training' ||
-                            col.key === 'transaksi';
-                          const isCategory =
-                            col.key === 'posPpob' || col.key === 'posOnly' || col.key === 'sicepat';
-                          const isWaktu = col.key === 'waktuUpdate';
-
-                          return (
-                            <td key={col.key} className="px-3 py-2.5 border-r border-slate-800/40 max-w-[200px] truncate">
-                              {isStatus || isProgress ? (
-                                <StatusBadge value={String(val ?? '')} />
-                              ) : isCategory ? (
-                                <StatusBadge value={String(val ?? '')} />
-                              ) : isWaktu && val ? (
-                                <span className="text-slate-500 text-[11px]">
-                                  {new Date(String(val)).toLocaleDateString('id-ID', {
-                                    day: '2-digit',
-                                    month: 'short',
-                                    year: 'numeric',
-                                    hour: '2-digit',
-                                    minute: '2-digit',
-                                  })}
-                                </span>
-                              ) : (
-                                <CellValue value={val} />
-                              )}
-                            </td>
-                          );
-                        })}
+                        {COLUMNS.map((col) => (
+                          <td key={col.key} className="px-3 py-2.5 border-r border-slate-800/40 max-w-[240px] truncate">
+                            <CellValue value={item[col.key]} />
+                          </td>
+                        ))}
                       </tr>
                     ))}
                   </tbody>
@@ -410,7 +320,7 @@ export default function DataLengkapPage() {
               <div className="px-4 py-2.5 text-xs text-slate-600 border-t border-slate-800 bg-slate-900/50 flex items-center justify-between">
                 <span>Total {displayCount} data loket ({filteredData.length !== data.length ? `${data.length} total` : ''})</span>
                 <span className="text-[10px] text-slate-600">
-                  Gunakan scroll horizontal untuk melihat semua kolom
+                  6 kolom ditampilkan
                 </span>
               </div>
             </div>
@@ -420,9 +330,11 @@ export default function DataLengkapPage() {
 
       {/* Modals */}
       <DataLengkapForm
+        key={showForm ? editItem?.id || 'new' : 'closed'}
         open={showForm}
         onClose={() => { setShowForm(false); setEditItem(null); }}
         onSave={editItem ? handleUpdate : handleAdd}
+        onSaveBatch={handleSaveBatch}
         editItem={editItem}
         nextNo={nextNo}
       />

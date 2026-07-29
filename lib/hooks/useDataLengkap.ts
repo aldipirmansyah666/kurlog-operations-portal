@@ -1,38 +1,55 @@
-'use client';
-
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
+import { supabase } from '@/lib/supabase';
 import type { DataLengkapItem } from '@/lib/types';
 import { emptyDataLengkap } from '@/lib/types';
+import type { RealtimeChannel } from '@supabase/supabase-js';
 
-const STORAGE_KEY = 'dataLengkapData';
-
-function loadFromStorage(): DataLengkapItem[] {
-  if (typeof window === 'undefined') return [];
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
+interface DbRow {
+  id: string;
+  no: number;
+  data: DataLengkapItem;
+  created_at: string;
+  updated_at: string;
 }
 
-function saveToStorage(data: DataLengkapItem[]) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-  } catch {
-    // localStorage full or unavailable
-  }
+function toItem(row: DbRow): DataLengkapItem {
+  return { ...row.data, id: row.id, no: row.no };
 }
 
 export function useDataLengkap() {
-  const [data, setData] = useState<DataLengkapItem[]>(loadFromStorage);
+  const [data, setData] = useState<DataLengkapItem[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const refresh = useCallback(() => {
-    setData(loadFromStorage());
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    const { data: rows, error } = await supabase
+      .from('data_lengkap')
+      .select('*')
+      .order('no', { ascending: true });
+
+    if (!error) setData((rows || []).map(toItem));
+    setLoading(false);
   }, []);
 
-  const addItem = useCallback((item: Omit<DataLengkapItem, 'id' | 'no' | 'waktuUpdate'>) => {
-    const current = loadFromStorage();
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  useEffect(() => {
+    const channel: RealtimeChannel = supabase
+      .channel('data-lengkap-changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'data_lengkap' },
+        () => { fetchData(); }
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [fetchData]);
+
+  const addItem = useCallback(async (item: Omit<DataLengkapItem, 'id' | 'no' | 'waktuUpdate'>) => {
+    const current = [...data];
     const nextNo = current.length > 0 ? Math.max(...current.map((i) => i.no)) + 1 : 1;
     const newItem: DataLengkapItem = {
       ...emptyDataLengkap(nextNo),
@@ -41,32 +58,44 @@ export function useDataLengkap() {
       no: nextNo,
       waktuUpdate: new Date().toISOString(),
     };
-    const updated = [...current, newItem];
-    saveToStorage(updated);
-    setData(updated);
+
+    const { error } = await supabase
+      .from('data_lengkap')
+      .insert({ id: newItem.id, no: newItem.no, data: newItem });
+
+    if (error) throw error;
+    await fetchData();
     return newItem;
-  }, []);
+  }, [data, fetchData]);
 
-  const updateItem = useCallback((id: string, updates: Partial<DataLengkapItem>) => {
-    const current = loadFromStorage();
-    const updated = current.map((item) =>
-      item.id === id ? { ...item, ...updates, waktuUpdate: new Date().toISOString() } : item
-    );
-    saveToStorage(updated);
-    setData(updated);
-  }, []);
+  const updateItem = useCallback(async (id: string, updates: Partial<DataLengkapItem>) => {
+    const current = data.find((i) => i.id === id);
+    if (!current) return;
+    const updated = { ...current, ...updates, waktuUpdate: new Date().toISOString() };
 
-  const deleteItem = useCallback((id: string) => {
-    const current = loadFromStorage();
-    const updated = current.filter((item) => item.id !== id);
-    saveToStorage(updated);
-    setData(updated);
-  }, []);
+    const { error } = await supabase
+      .from('data_lengkap')
+      .update({ data: updated, updated_at: new Date().toISOString() })
+      .eq('id', id);
 
-  const importItems = useCallback((items: Omit<DataLengkapItem, 'id' | 'no' | 'waktuUpdate'>[]) => {
-    const current = loadFromStorage();
+    if (error) throw error;
+    await fetchData();
+  }, [data, fetchData]);
+
+  const deleteItem = useCallback(async (id: string) => {
+    const { error } = await supabase
+      .from('data_lengkap')
+      .delete()
+      .eq('id', id);
+
+    if (error) throw error;
+    await fetchData();
+  }, [fetchData]);
+
+  const importItems = useCallback(async (items: Omit<DataLengkapItem, 'id' | 'no' | 'waktuUpdate'>[]) => {
+    const current = [...data];
     let nextNo = current.length > 0 ? Math.max(...current.map((i) => i.no)) + 1 : 1;
-    const newItems: DataLengkapItem[] = items.map((item) => {
+    const rows = items.map((item) => {
       const newItem: DataLengkapItem = {
         ...emptyDataLengkap(nextNo),
         ...item,
@@ -75,18 +104,19 @@ export function useDataLengkap() {
         waktuUpdate: new Date().toISOString(),
       };
       nextNo++;
-      return newItem;
+      return { id: newItem.id, no: newItem.no, data: newItem };
     });
-    const updated = [...current, ...newItems];
-    saveToStorage(updated);
-    setData(updated);
-    return newItems;
-  }, []);
 
-  const clearAll = useCallback(() => {
-    saveToStorage([]);
-    setData([]);
-  }, []);
+    const { error } = await supabase.from('data_lengkap').insert(rows);
+    if (error) throw error;
+    await fetchData();
+  }, [data, fetchData]);
 
-  return { data, addItem, updateItem, deleteItem, importItems, clearAll, refresh };
+  const clearAll = useCallback(async () => {
+    const { error } = await supabase.from('data_lengkap').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    if (error) throw error;
+    await fetchData();
+  }, [fetchData]);
+
+  return { data, loading, addItem, updateItem, deleteItem, importItems, clearAll, refetch: fetchData };
 }
