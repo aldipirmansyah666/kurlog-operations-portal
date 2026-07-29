@@ -22,13 +22,35 @@ export function useDataLengkap() {
 
   const fetchData = useCallback(async () => {
     setLoading(true);
-    const { data: rows, error } = await supabase
-      .from('data_lengkap')
-      .select('*')
-      .order('no', { ascending: true })
-      .range(0, 999999);
+    const pageSize = 10000;
+    let allRows: DbRow[] = [];
+    let from = 0;
+    let keepFetching = true;
 
-    if (!error) setData((rows || []).map(toItem));
+    while (keepFetching) {
+      const { data: rows, error } = await supabase
+        .from('data_lengkap')
+        .select('*')
+        .order('no', { ascending: true })
+        .range(from, from + pageSize - 1);
+
+      if (error) {
+        console.error('Supabase fetch error:', error);
+        setLoading(false);
+        return;
+      }
+
+      const batch = rows || [];
+      allRows = allRows.concat(batch);
+
+      if (batch.length < pageSize) {
+        keepFetching = false;
+      } else {
+        from += pageSize;
+      }
+    }
+
+    setData(allRows.map(toItem));
     setLoading(false);
   }, []);
 
