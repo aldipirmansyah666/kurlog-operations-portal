@@ -26,7 +26,7 @@ export function useDataLengkap() {
       .from('data_lengkap')
       .select('*')
       .order('no', { ascending: true })
-      .limit(1000000);
+      .range(0, 999999);
 
     if (!error) setData((rows || []).map(toItem));
     setLoading(false);
