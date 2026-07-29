@@ -12,6 +12,7 @@ import { useToast } from '@/lib/hooks/useToast';
 import type { DataLengkapItem } from '@/lib/types';
 
 const COLUMNS: { key: keyof DataLengkapItem; label: string; width: string }[] = [
+  { key: 'no', label: 'NO', width: 'w-14' },
   { key: 'ppid', label: 'PID', width: 'w-32' },
   { key: 'namaLoketKurlog', label: 'NAMA LOKET DI KURLOG', width: 'w-48' },
   { key: 'noHpLoket', label: 'NO.HP LOKET', width: 'w-32' },
@@ -320,7 +321,7 @@ export default function DataLengkapPage() {
               <div className="px-4 py-2.5 text-xs text-slate-600 border-t border-slate-800 bg-slate-900/50 flex items-center justify-between">
                 <span>Total {displayCount} data loket ({filteredData.length !== data.length ? `${data.length} total` : ''})</span>
                 <span className="text-[10px] text-slate-600">
-                  6 kolom ditampilkan
+                  7 kolom ditampilkan
                 </span>
               </div>
             </div>

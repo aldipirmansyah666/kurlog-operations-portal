@@ -25,7 +25,8 @@ export function useDataLengkap() {
     const { data: rows, error } = await supabase
       .from('data_lengkap')
       .select('*')
-      .order('no', { ascending: true });
+      .order('no', { ascending: true })
+      .limit(1000000);
 
     if (!error) setData((rows || []).map(toItem));
     setLoading(false);
