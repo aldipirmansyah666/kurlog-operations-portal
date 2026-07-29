@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { PackageSearch, ShoppingBag, AlertTriangle, FileCheck, Users, LogOut, Shield } from 'lucide-react';
+import { PackageSearch, ShoppingBag, AlertTriangle, FileCheck, Users, LogOut, Shield, Database } from 'lucide-react';
 
 interface UserInfo {
   name: string;
@@ -13,6 +13,7 @@ interface UserInfo {
 
 const NAV_ITEMS = [
   { href: '/', label: 'Monitoring Resi', icon: PackageSearch },
+  { href: '/data-lengkap', label: 'Data Lengkap', icon: Database },
   { href: '/bagging', label: 'Otomasi Bagging', icon: ShoppingBag },
   { href: '/bailout', label: 'Informasi Bailout', icon: AlertTriangle },
   { href: '/reconcile', label: 'Reconcile', icon: FileCheck },

@@ -52,10 +52,10 @@ export default function BaggingPage() {
       const reader = new FileReader();
       reader.onload = (evt) => {
         try {
-          const bstr = evt.target?.result;
-          const workbook = XLSX.read(bstr, { type: 'binary' });
+          const data = evt.target?.result as ArrayBuffer;
+          const workbook = XLSX.read(data, { type: 'array' });
           const sheet = workbook.Sheets[workbook.SheetNames[0]];
-          const jsonData = XLSX.utils.sheet_to_json<BaggingRow>(sheet, { range: 1 });
+          const jsonData = XLSX.utils.sheet_to_json<BaggingRow>(sheet);
           allParsedRows = [...allParsedRows, ...jsonData];
         } catch (err) {
           console.error(`Error reading ${file.name}:`, err);
@@ -66,7 +66,7 @@ export default function BaggingPage() {
           setIsProcessingExcel(false);
         }
       };
-      reader.readAsBinaryString(file);
+      reader.readAsArrayBuffer(file);
     });
   };
 
@@ -115,7 +115,7 @@ export default function BaggingPage() {
         <div>
           <input
             type="file"
-            accept=".xlsx"
+            accept=".xlsx,.xls"
             multiple
             onChange={handleFileUpload}
             className="block w-full text-xs text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-medium file:bg-[#1E293B] file:text-white hover:file:bg-slate-700 file:cursor-pointer bg-slate-50 p-2 rounded-lg border border-[#E2E8F0] cursor-pointer"
@@ -255,7 +255,7 @@ export default function BaggingPage() {
       ) : (
         <EmptyState
           title="Upload file Excel"
-          description="Unggah file Excel KurLog (.xlsx) untuk melihat draft pengingat bagging per agen."
+          description="Unggah file Excel KurLog (.xlsx / .xls) untuk melihat draft pengingat bagging per agen."
           icon={<Upload className="w-8 h-8 text-slate-300" />}
         />
       )}

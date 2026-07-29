@@ -74,3 +74,111 @@ export interface User {
   role: UserRole;
   created_at: string;
 }
+
+export interface DataLengkapItem {
+  id: string;
+  no: number;
+  tglPendaftaran: string;
+  statusKurlog: string;
+  ppid: string;
+  namaLoketOnpays: string;
+  namaLoketKurlog: string;
+  locationId: string;
+  userMile: string;
+  passwordMile: string;
+  regional: string;
+  kcuKc: string;
+  namaPemilik: string;
+  noKtp: string;
+  noNpwp: string;
+  noHpPemilik: string;
+  noHpLoket: string;
+  email: string;
+  noDirian: string;
+  nib: string;
+  noKbli: string;
+  alamatPemilikKtp: string;
+  alamatLengkapLoket: string;
+  rtRw: string;
+  kelDesa: string;
+  kec: string;
+  kabKota: string;
+  propinsi: string;
+  kodePos: string;
+  electricArea: string;
+  rekomendasi: string;
+  latitude: string;
+  longitude: string;
+  nomorRekening: string;
+  namaBank: string;
+  namaPemilikRekening: string;
+  syarat: string;
+  pengajuanSurveyKePos: string;
+  pengajuanPos: string;
+  pendaftaranKurlog: string;
+  kelengkapanPerangkat: string;
+  aktivasiKurlog: string;
+  aktivasiSicepat: string;
+  training: string;
+  transaksi: string;
+  posPpob: string;
+  posOnly: string;
+  sicepat: string;
+  catatan: string;
+  waktuUpdate: string;
+}
+
+export function emptyDataLengkap(no: number): DataLengkapItem {
+  return {
+    id: '',
+    no,
+    tglPendaftaran: '',
+    statusKurlog: '',
+    ppid: '',
+    namaLoketOnpays: '',
+    namaLoketKurlog: '',
+    locationId: '',
+    userMile: '',
+    passwordMile: '',
+    regional: '',
+    kcuKc: '',
+    namaPemilik: '',
+    noKtp: '',
+    noNpwp: '',
+    noHpPemilik: '',
+    noHpLoket: '',
+    email: '',
+    noDirian: '',
+    nib: '',
+    noKbli: '',
+    alamatPemilikKtp: '',
+    alamatLengkapLoket: '',
+    rtRw: '',
+    kelDesa: '',
+    kec: '',
+    kabKota: '',
+    propinsi: '',
+    kodePos: '',
+    electricArea: '',
+    rekomendasi: '',
+    latitude: '',
+    longitude: '',
+    nomorRekening: '',
+    namaBank: '',
+    namaPemilikRekening: '',
+    syarat: '',
+    pengajuanSurveyKePos: '',
+    pengajuanPos: '',
+    pendaftaranKurlog: '',
+    kelengkapanPerangkat: '',
+    aktivasiKurlog: '',
+    aktivasiSicepat: '',
+    training: '',
+    transaksi: '',
+    posPpob: '',
+    posOnly: '',
+    sicepat: '',
+    catatan: '',
+    waktuUpdate: '',
+  };
+}
