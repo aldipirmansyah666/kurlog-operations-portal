@@ -77,7 +77,7 @@ lib/
   dataLengkapUtama.ts        # column config (label/group/aliases) for the master table + helpers
   hooks/
     useResi.ts               # CRUD operations + data fetching (table `resi`)
-    useDataLengkap.ts        # CRUD + Excel import (table `data_lengkap`)
+    useDataLengkap.ts        # CRUD + Excel import — reads/writes master `data_lengkap_utama`
     useDataLengkapUtama.ts   # CRUD + chunked Excel import (table `data_lengkap_utama`)
     useResiFilters.ts        # search, filter, chart data computation
     usePagination.ts         # pagination state
@@ -91,7 +91,8 @@ lib/
 - **Supabase env vars** required in `env.local`: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`. The app will crash without them.
 - **`xlsx` is imported in 5 pages**: `bagging`, `bailout`, `reconcile`, `data-lengkap`, and `data-lengkap-utama` — not just bagging.
 - **Data CRUD runs directly in the browser** against Supabase via the anon key (`lib/hooks/useResi.ts`, `useDataLengkap.ts`, `useDataLengkapUtama.ts`); API routes only handle auth (`login`/`logout`/`me`) and admin user management. Both hooks also subscribe to Supabase **realtime** (`postgres_changes`) on their table, so mutations are followed by a refetch.
-- **Table shapes differ**: `resi` and `users` are flat columns; `data_lengkap` stores each row's entire `DataLengkapItem` in a **JSONB `data` column** (plus `id`, `no`, `created_at`, `updated_at`) — insert as `{ id, no, data }`. `data_lengkap_utama` is a **flat table** whose 47 snake_case columns mirror the master Excel layout; **every column is nullable/optional** except `id` (primary key). Column list + group config (`STATUS`, `KURLOG`, `REKENING`) lives in `lib/dataLengkapUtama.ts` (`DATA_LENGKAP_UTAMA_COLUMNS`); import/export expects a 2-row header. Values are sanitized to `null` when empty via `sanitizeDataLengkapUtamaValues()` before insert/update. The table view freezes columns `NO`, `PPID`, `NAMA LOKET DI ONPAYS` on horizontal scroll.
+- **Table shapes differ**: `resi` and `users` are flat columns; `data_lengkap_utama` is a **flat table** whose 47 snake_case columns mirror the master Excel layout; **every column is nullable/optional** except `id` (primary key). Column list + group config (`STATUS`, `KURLOG`, `REKENING`) lives in `lib/dataLengkapUtama.ts` (`DATA_LENGKAP_UTAMA_COLUMNS`); import/export expects a 2-row header. Values are sanitized to `null` when empty via `sanitizeDataLengkapUtamaValues()` before insert/update. The table view freezes columns `NO`, `PPID`, `NAMA LOKET DI ONPAYS` on horizontal scroll.
+- **`data_lengkap` page reads the master table**: `useDataLengkap` (and `useDataLengkapUtama`) both read/write `data_lengkap_utama` — the loket page maps columns via `lib/dataLengkap.ts` (`dataLengkapUtamaToItem` / `dataLengkapItemToUtamaValues`). The legacy JSONB `data_lengkap` table is no longer used. Only 7 columns are shown on the loket page; `tglPendaftaran` and `statusKurlog` have no master column and are not persisted.
 - **`status_fu` is derived, not stored**: `useResi.updateStatus` sets it to `CLOSED` for closed statuses (`DELIVERED`/`RETUR`), else `PERLU FOLLOW UP`.
 - **All page components are `'use client'`**, but `layout.tsx` is a server component and API routes (`app/api/`) are server-side.
 - **Status conventions**: `PERJALANAN`, `DELIVERED`, `RETUR`, `HOLD`, `CCH` — business terms, not generic. Closed statuses are `DELIVERED` and `RETUR` (see `isClosedStatus()` in `lib/constants.ts`).

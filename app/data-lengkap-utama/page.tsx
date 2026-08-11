@@ -9,7 +9,9 @@ import PasteImportModal from '@/app/components/data-lengkap-utama/PasteImportMod
 import EmptyState from '@/app/components/ui/EmptyState';
 import ToastContainer from '@/app/components/ui/Toast';
 import ConfirmDialog from '@/app/components/ui/ConfirmDialog';
+import Pagination from '@/app/components/ui/Pagination';
 import { useToast } from '@/lib/hooks/useToast';
+import { usePagination } from '@/lib/hooks/usePagination';
 import { DATA_LENGKAP_UTAMA_COLUMNS, buildDataLengkapUtamaGroups, parseDataLengkapUtamaRows } from '@/lib/dataLengkapUtama';
 import type { DataLengkapUtamaItem, DataLengkapUtamaValues } from '@/lib/types';
 
@@ -171,6 +173,8 @@ export default function DataLengkapUtamaPage() {
       return true;
     });
   }, [data, searchQuery, filters]);
+
+  const pagination = usePagination(filteredData);
 
   const activeFilterCount = Object.values(filters).filter(Boolean).length;
 
@@ -567,7 +571,7 @@ export default function DataLengkapUtamaPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#E2E8F0] text-slate-600">
-                  {filteredData.map((item) => (
+                  {pagination.paginatedItems.map((item) => (
                     <tr key={item.id} className="hover:bg-slate-50/50 transition-colors">
                       <td
                         style={{
@@ -616,6 +620,22 @@ export default function DataLengkapUtamaPage() {
                   ))}
                 </tbody>
               </table>
+            </div>
+            <div className="px-4 border-t border-[#E2E8F0] bg-slate-50/50">
+              <Pagination
+                currentPage={pagination.currentPage}
+                totalPages={pagination.totalPages}
+                totalItems={pagination.totalItems}
+                pageSize={pagination.pageSize}
+                startItem={pagination.startItem}
+                endItem={pagination.endItem}
+                onPrev={pagination.prevPage}
+                onNext={pagination.nextPage}
+                onGoTo={pagination.goToPage}
+                onPageSizeChange={pagination.changePageSize}
+                hasPrev={pagination.hasPrev}
+                hasNext={pagination.hasNext}
+              />
             </div>
             <div className="px-4 py-2.5 text-xs text-slate-400 border-t border-[#E2E8F0] bg-slate-50/50 flex items-center justify-between">
               <span>Total {displayCount} data utama</span>

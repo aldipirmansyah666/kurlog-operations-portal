@@ -8,7 +8,9 @@ import DataLengkapForm from '@/app/components/data-lengkap/DataLengkapForm';
 import EmptyState from '@/app/components/ui/EmptyState';
 import ToastContainer from '@/app/components/ui/Toast';
 import ConfirmDialog from '@/app/components/ui/ConfirmDialog';
+import Pagination from '@/app/components/ui/Pagination';
 import { useToast } from '@/lib/hooks/useToast';
+import { usePagination } from '@/lib/hooks/usePagination';
 import type { DataLengkapItem } from '@/lib/types';
 import { emptyDataLengkap } from '@/lib/types';
 
@@ -57,6 +59,8 @@ export default function DataLengkapPage() {
       SEARCH_KEYS.some((key) => String(item[key] ?? '').toLowerCase().includes(q))
     );
   }, [data, searchQuery]);
+
+  const pagination = usePagination(filteredData);
 
   const handleAdd = async (item: DataLengkapItem) => {
     try {
@@ -263,7 +267,7 @@ export default function DataLengkapPage() {
             </div>
           </div>
           <p className="text-xs text-slate-400">
-            Data lengkap loket KurLog. Kelola data secara mandiri atau import dari file Excel.
+            Data lengkap loket KurLog diambil dari master Data Lengkap Utama. Perubahan di sini ikut mengubah data master.
           </p>
         </div>
 
@@ -345,7 +349,7 @@ export default function DataLengkapPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#E2E8F0] text-slate-600">
-                  {filteredData.map((item) => (
+                  {pagination.paginatedItems.map((item) => (
                     <tr key={item.id || item.no} className="hover:bg-slate-50/50 transition-colors">
                       <td className="p-2.5">
                         <div className="flex items-center gap-1">
@@ -374,6 +378,22 @@ export default function DataLengkapPage() {
                   ))}
                 </tbody>
               </table>
+            </div>
+            <div className="px-4 border-t border-[#E2E8F0] bg-slate-50/50">
+              <Pagination
+                currentPage={pagination.currentPage}
+                totalPages={pagination.totalPages}
+                totalItems={pagination.totalItems}
+                pageSize={pagination.pageSize}
+                startItem={pagination.startItem}
+                endItem={pagination.endItem}
+                onPrev={pagination.prevPage}
+                onNext={pagination.nextPage}
+                onGoTo={pagination.goToPage}
+                onPageSizeChange={pagination.changePageSize}
+                hasPrev={pagination.hasPrev}
+                hasNext={pagination.hasNext}
+              />
             </div>
             <div className="px-4 py-2.5 text-xs text-slate-400 border-t border-[#E2E8F0] bg-slate-50/50 flex items-center justify-between">
               <span>Total {displayCount} data loket</span>
