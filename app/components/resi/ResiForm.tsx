@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { Plus } from 'lucide-react';
-import { LAYANAN_OPTIONS, STATUS_LIST } from '@/lib/constants';
+import { LAYANAN_OPTIONS, STATUS_LIST, isClosedStatus } from '@/lib/constants';
 
 interface ResiFormProps {
   onSubmit: (data: {
@@ -15,10 +15,9 @@ interface ResiFormProps {
     status_fu: string;
   }) => Promise<void>;
   submitting: boolean;
-  onSuccess: () => void;
 }
 
-export default function ResiForm({ onSubmit, submitting, onSuccess }: ResiFormProps) {
+export default function ResiForm({ onSubmit, submitting }: ResiFormProps) {
   const todayStr = new Date().toLocaleDateString('id-ID', {
     day: '2-digit',
     month: '2-digit',
@@ -46,7 +45,7 @@ export default function ResiForm({ onSubmit, submitting, onSuccess }: ResiFormPr
     e.preventDefault();
     if (!validate()) return;
 
-    const isClosed = ['DELIVERED', 'RETUR'].includes(statusResi);
+    const isClosed = isClosedStatus(statusResi);
     await onSubmit({
       tgl_tiket: tglTiket.trim() || todayStr,
       no_resi: noResi.trim(),
@@ -64,7 +63,6 @@ export default function ResiForm({ onSubmit, submitting, onSuccess }: ResiFormPr
     setPetugas('');
     setStatusResi('PERJALANAN');
     setErrors({});
-    onSuccess();
   };
 
   const inputClass = (field: string) =>

@@ -26,10 +26,6 @@ export function usePagination<T>(items: T[]) {
     setCurrentPage((p) => Math.max(p - 1, 1));
   }, []);
 
-  const resetPage = useCallback(() => {
-    setCurrentPage(1);
-  }, []);
-
   const changePageSize = useCallback((newSize: PageSize) => {
     setPageSize(newSize);
     setCurrentPage(1);
@@ -49,7 +45,6 @@ export function usePagination<T>(items: T[]) {
     goToPage,
     nextPage,
     prevPage,
-    resetPage,
     changePageSize,
     hasNext: safePage < totalPages,
     hasPrev: safePage > 1,

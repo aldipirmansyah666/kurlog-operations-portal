@@ -1,31 +1,24 @@
 import { useState, useCallback, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
-import type { DataLengkapItem } from '@/lib/types';
+import type { DataLengkapUtamaItem, DataLengkapUtamaValues } from '@/lib/types';
+import { sanitizeDataLengkapUtamaValues } from '@/lib/dataLengkapUtama';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 
 const PAGE_SIZE = 1000;
 const INSERT_CHUNK = 500;
 
-interface DataLengkapRow {
-  id: string;
-  no: number;
-  data: DataLengkapItem;
-  created_at: string;
-  updated_at: string;
-}
-
-export function useDataLengkap() {
-  const [data, setData] = useState<DataLengkapItem[]>([]);
+export function useDataLengkapUtama() {
+  const [data, setData] = useState<DataLengkapUtamaItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchData = useCallback(async () => {
-    const allRows: DataLengkapRow[] = [];
+    const allRows: DataLengkapUtamaItem[] = [];
     let from = 0;
     let keepFetching = true;
 
     while (keepFetching) {
       const { data: rows, error } = await supabase
-        .from('data_lengkap')
+        .from('data_lengkap_utama')
         .select('*')
         .order('no', { ascending: true })
         .range(from, from + PAGE_SIZE - 1);
@@ -36,7 +29,7 @@ export function useDataLengkap() {
         return;
       }
 
-      const batch = (rows || []) as DataLengkapRow[];
+      const batch = rows || [];
       allRows.push(...batch);
 
       if (batch.length < PAGE_SIZE) {
@@ -46,7 +39,7 @@ export function useDataLengkap() {
       }
     }
 
-    setData(allRows.map((row) => row.data));
+    setData(allRows);
     setLoading(false);
   }, []);
 
@@ -57,10 +50,10 @@ export function useDataLengkap() {
 
   useEffect(() => {
     const channel: RealtimeChannel = supabase
-      .channel('data-lengkap-changes')
+      .channel('data-lengkap-utama-changes')
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'data_lengkap' },
+        { event: '*', schema: 'public', table: 'data_lengkap_utama' },
         () => {
           fetchData();
         }
@@ -81,11 +74,10 @@ export function useDataLengkap() {
   }, [data]);
 
   const addItem = useCallback(
-    async (item: DataLengkapItem) => {
-      const { error } = await supabase.from('data_lengkap').insert({
-        no: nextNo(),
-        data: item,
-      });
+    async (values: DataLengkapUtamaValues) => {
+      const { error } = await supabase
+        .from('data_lengkap_utama')
+        .insert({ ...sanitizeDataLengkapUtamaValues(values), no: nextNo() });
       if (error) throw error;
       await fetchData();
     },
@@ -93,10 +85,10 @@ export function useDataLengkap() {
   );
 
   const updateItem = useCallback(
-    async (id: string, item: DataLengkapItem) => {
+    async (id: string, values: DataLengkapUtamaValues) => {
       const { error } = await supabase
-        .from('data_lengkap')
-        .update({ data: item, updated_at: new Date().toISOString() })
+        .from('data_lengkap_utama')
+        .update({ ...sanitizeDataLengkapUtamaValues(values), updated_at: new Date().toISOString() })
         .eq('id', id);
       if (error) throw error;
       await fetchData();
@@ -107,7 +99,7 @@ export function useDataLengkap() {
   const deleteItem = useCallback(
     async (id: string) => {
       const { error } = await supabase
-        .from('data_lengkap')
+        .from('data_lengkap_utama')
         .delete()
         .eq('id', id);
       if (error) throw error;
@@ -117,14 +109,11 @@ export function useDataLengkap() {
   );
 
   const importItems = useCallback(
-    async (items: DataLengkapItem[]) => {
+    async (items: DataLengkapUtamaValues[]) => {
       let no = nextNo();
       for (let i = 0; i < items.length; i += INSERT_CHUNK) {
-        const chunk = items.slice(i, i + INSERT_CHUNK).map((item) => ({
-          no: no++,
-          data: item,
-        }));
-        const { error } = await supabase.from('data_lengkap').insert(chunk);
+        const chunk = items.slice(i, i + INSERT_CHUNK).map((item) => ({ ...sanitizeDataLengkapUtamaValues(item), no: no++ }));
+        const { error } = await supabase.from('data_lengkap_utama').insert(chunk);
         if (error) throw error;
       }
       await fetchData();
@@ -134,7 +123,7 @@ export function useDataLengkap() {
 
   const deleteAll = useCallback(async () => {
     const { error } = await supabase
-      .from('data_lengkap')
+      .from('data_lengkap_utama')
       .delete()
       .neq('id', '00000000-0000-0000-0000-000000000000');
     if (error) throw error;

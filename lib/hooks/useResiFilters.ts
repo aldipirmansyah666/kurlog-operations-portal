@@ -40,8 +40,8 @@ export function useResiFilters(resiList: ResiItem[]) {
       if (filterTab === 'fu' && isClosedStatus(item.status_resi)) return false;
       if (filterTab === 'done' && !isClosedStatus(item.status_resi)) return false;
       const itemISO = parseDateToISO(item.tgl_tiket);
-      if (startDateFilter && itemISO < startDateFilter) return false;
-      if (endDateFilter && itemISO > endDateFilter) return false;
+      if (itemISO && startDateFilter && itemISO < startDateFilter) return false;
+      if (itemISO && endDateFilter && itemISO > endDateFilter) return false;
       return true;
     });
   }, [resiList, searchQuery, filterTab, startDateFilter, endDateFilter]);

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useRef } from 'react';
-import { Plus, FileUp, Search, Trash2, Pencil, Database, X, Download, Table2 } from 'lucide-react';
+import { Search, Database, X, Download, Table2, Plus, FileUp, Trash2, Pencil, ClipboardPaste } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { useDataLengkap } from '@/lib/hooks/useDataLengkap';
 import DataLengkapForm from '@/app/components/data-lengkap/DataLengkapForm';
@@ -10,8 +10,19 @@ import ToastContainer from '@/app/components/ui/Toast';
 import ConfirmDialog from '@/app/components/ui/ConfirmDialog';
 import { useToast } from '@/lib/hooks/useToast';
 import type { DataLengkapItem } from '@/lib/types';
+import { emptyDataLengkap } from '@/lib/types';
 
-const COLUMNS: { key: keyof DataLengkapItem; label: string }[] = [
+const SEARCH_KEYS: (keyof DataLengkapItem)[] = [
+  'ppid',
+  'namaLoketKurlog',
+  'namaLoketOnpays',
+  'noHpLoket',
+  'email',
+  'userMile',
+  'namaPemilik',
+];
+
+const DISPLAY_COLUMNS: { key: keyof DataLengkapItem; label: string }[] = [
   { key: 'no', label: 'NO' },
   { key: 'ppid', label: 'PID' },
   { key: 'namaLoketKurlog', label: 'NAMA LOKET DI KURLOG' },
@@ -29,7 +40,7 @@ function CellValue({ value }: { value: string | number | boolean | undefined }) 
 }
 
 export default function DataLengkapPage() {
-  const { data, loading, addItem, updateItem, deleteItem, importItems, clearAll } = useDataLengkap();
+  const { data, loading, addItem, updateItem, deleteItem, deleteAll, importItems } = useDataLengkap();
   const { toasts, showToast, removeToast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -43,37 +54,25 @@ export default function DataLengkapPage() {
     if (!searchQuery.trim()) return data;
     const q = searchQuery.toLowerCase();
     return data.filter((item) =>
-      [item.ppid, item.namaLoketKurlog, item.noHpLoket, item.email, item.userMile]
-        .some((field) => field?.toLowerCase().includes(q))
+      SEARCH_KEYS.some((key) => String(item[key] ?? '').toLowerCase().includes(q))
     );
   }, [data, searchQuery]);
 
-  const nextNo = useMemo(() => (data.length > 0 ? Math.max(...data.map((i) => i.no)) + 1 : 1), [data]);
-
-  const handleAdd = async (formData: DataLengkapItem) => {
+  const handleAdd = async (item: DataLengkapItem) => {
     try {
-      await addItem(formData);
-      showToast('Data loket berhasil ditambahkan', 'success');
+      await addItem(item);
+      showToast('Data berhasil ditambahkan', 'success');
       setShowForm(false);
     } catch {
       showToast('Gagal menambahkan data', 'error');
     }
   };
 
-  const handleSaveBatch = async (items: DataLengkapItem[]) => {
+  const handleUpdate = async (item: DataLengkapItem) => {
+    if (!editItem?.id) return;
     try {
-      await importItems(items);
-      showToast(`Berhasil menyimpan ${items.length} data loket`, 'success');
-      setShowForm(false);
-    } catch {
-      showToast('Gagal menyimpan data', 'error');
-    }
-  };
-
-  const handleUpdate = async (formData: DataLengkapItem) => {
-    try {
-      await updateItem(formData.id, formData);
-      showToast('Data loket berhasil diperbarui', 'success');
+      await updateItem(editItem.id, item);
+      showToast('Data berhasil diperbarui', 'success');
       setShowForm(false);
       setEditItem(null);
     } catch {
@@ -85,7 +84,7 @@ export default function DataLengkapPage() {
     if (!deleteTarget) return;
     try {
       await deleteItem(deleteTarget);
-      showToast('Data loket berhasil dihapus', 'success');
+      showToast('Data berhasil dihapus', 'success');
     } catch {
       showToast('Gagal menghapus data', 'error');
     }
@@ -94,7 +93,7 @@ export default function DataLengkapPage() {
 
   const handleClearAll = async () => {
     try {
-      await clearAll();
+      await deleteAll();
       showToast('Semua data berhasil dihapus', 'success');
       setShowClearAll(false);
     } catch {
@@ -112,10 +111,10 @@ export default function DataLengkapPage() {
       showToast('Tidak ada data untuk diexport', 'warning');
       return;
     }
-    const headers = COLUMNS.map((c) => c.label);
-    const rows = filteredData.map((item) => COLUMNS.map((c) => item[c.key] ?? ''));
+    const headers = DISPLAY_COLUMNS.map((c) => c.label);
+    const rows = filteredData.map((item) => DISPLAY_COLUMNS.map((c) => item[c.key] ?? ''));
     const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-    ws['!cols'] = COLUMNS.map(() => ({ wch: 20 }));
+    ws['!cols'] = DISPLAY_COLUMNS.map(() => ({ wch: 20 }));
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Data Lengkap');
     XLSX.writeFile(wb, `Data-Lengkap-Loket-${new Date().toISOString().slice(0, 10)}.xlsx`);
@@ -132,34 +131,83 @@ export default function DataLengkapPage() {
         const wb = XLSX.read(evt.target?.result, { type: 'binary' });
         const wsname = wb.SheetNames[0];
         const ws = wb.Sheets[wsname];
-        const rows = XLSX.utils.sheet_to_json<(string | undefined)[]>(ws, { header: 1 });
+        const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws);
 
-        if (rows.length < 2) {
-          showToast('File Excel kosong atau tidak valid', 'error');
+        if (rows.length === 0) {
+          showToast('Tidak ada baris data yang ditemukan', 'warning');
           return;
         }
 
-        const headerRow = rows[0] as string[];
-        const colMap = COLUMNS.map((c) => {
-          const idx = headerRow.findIndex((h) => h?.trim().toUpperCase() === c.label);
-          return { key: c.key, idx };
+        // Map Excel rows to DataLengkapItem
+        const items: DataLengkapItem[] = rows.map((row, idx) => {
+          const item = emptyDataLengkap(0);
+          const keyMap: Record<string, keyof DataLengkapItem> = {
+            'PPID': 'ppid',
+            'NAMA LOKET DI ONPAYS': 'namaLoketOnpays',
+            'NAMA LOKET DI KURLOG': 'namaLoketKurlog',
+            'NAMA PEMILIK': 'namaPemilik',
+            'NO KTP': 'noKtp',
+            'NO NPWP': 'noNpwp',
+            'NO HP PEMILIK': 'noHpPemilik',
+            'NO.HP LOKET': 'noHpLoket',
+            'EMAIL': 'email',
+            'NO DIRIAN': 'noDirian',
+            'NIB': 'nib',
+            'NO KBLI': 'noKbli',
+            'ALAMAT PEMILIK KTP': 'alamatPemilikKtp',
+            'ALAMAT LENGKAP LOKET': 'alamatLengkapLoket',
+            'RT/RW': 'rtRw',
+            'KEL/DESA': 'kelDesa',
+            'KEC': 'kec',
+            'KAB/KOT': 'kabKota',
+            'PROPINSI': 'propinsi',
+            'KODE POS': 'kodePos',
+            'ELECTRIC AREA': 'electricArea',
+            'REKOMENDASI': 'rekomendasi',
+            'LATITUDE': 'latitude',
+            'LONGITUDE': 'longitude',
+            'NOMOR REKENING': 'nomorRekening',
+            'NAMA BANK': 'namaBank',
+            'NAMA PEMILIK REKENING': 'namaPemilikRekening',
+            'SYARAT': 'syarat',
+            'PENGAJUAN SURVEY KE POS': 'pengajuanSurveyKePos',
+            'PENGAJUAN POS': 'pengajuanPos',
+            'PENDAFTARAN KURLOG': 'pendaftaranKurlog',
+            'KELENGKAPAN PERANGKAT': 'kelengkapanPerangkat',
+            'AKTIVASI KURLOG': 'aktivasiKurlog',
+            'AKTIVASI SICEPAT': 'aktivasiSicepat',
+            'TRAINING': 'training',
+            'TRANSAKSI': 'transaksi',
+            'POS + PPOB': 'posPpob',
+            'POS ONLY': 'posOnly',
+            'SICEPAT': 'sicepat',
+            'CATATAN': 'catatan',
+            'WAKTU': 'waktuUpdate',
+            'STATUS': 'statusKurlog',
+            'TGL PENDAFTARAN': 'tglPendaftaran',
+            'LOCATION ID': 'locationId',
+            'USER MILE': 'userMile',
+            'PASSWORD MILE': 'passwordMile',
+            'REGIONAL': 'regional',
+            'KCU/KC': 'kcuKc',
+          };
+
+          for (const [excelKey, itemKey] of Object.entries(keyMap)) {
+            const found = Object.keys(row).find(
+              (k) => k.trim().toUpperCase() === excelKey
+            );
+            if (found) {
+              (item as unknown as Record<string, string>)[itemKey] = String(row[found] ?? '');
+            }
+          }
+          return item;
         });
 
-        const imported: Omit<DataLengkapItem, 'id' | 'no' | 'waktuUpdate'>[] = [];
-        for (let i = 1; i < rows.length; i++) {
-          const row = rows[i];
-          if (!row || row.every((c) => c === undefined || c === null || String(c).trim() === '')) continue;
-          const obj: Record<string, string> = {};
-          for (const { key, idx } of colMap) {
-            obj[key] = idx >= 0 && row[idx] !== undefined ? String(row[idx]).trim() : '';
-          }
-          imported.push(obj as unknown as Omit<DataLengkapItem, 'id' | 'no' | 'waktuUpdate'>);
-        }
-
-        await importItems(imported);
-        showToast(`Berhasil mengimport ${imported.length} data`, 'success');
-      } catch {
-        showToast('Gagal membaca file Excel', 'error');
+        // Import all items in batch
+        await importItems(items);
+        showToast(`Berhasil mengimport ${items.length} data`, 'success');
+      } catch (err) {
+        showToast(err instanceof Error ? err.message : 'Gagal membaca file Excel', 'error');
       }
     };
     reader.readAsBinaryString(file);
@@ -178,7 +226,7 @@ export default function DataLengkapPage() {
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="flex items-center gap-2">
               <Database className="w-5 h-5 text-purple-500" />
-              <h1 className="text-lg font-semibold text-slate-800">Data Lengkap Loket &amp; Agen</h1>
+              <h1 className="text-lg font-semibold text-slate-800">Data Lengkap Loket & Agen</h1>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
               <button
@@ -186,7 +234,7 @@ export default function DataLengkapPage() {
                 className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium text-white bg-[#1E293B] hover:bg-slate-700 rounded-lg transition-colors cursor-pointer"
               >
                 <Plus className="w-3.5 h-3.5" />
-                Tambah Data Loket
+                Tambah Data
               </button>
               <button
                 onClick={handleExport}
@@ -215,7 +263,7 @@ export default function DataLengkapPage() {
             </div>
           </div>
           <p className="text-xs text-slate-400">
-            Data akses loket KurLog — PPID, nama loket, kontak, dan kredensial Mile.
+            Data lengkap loket KurLog. Kelola data secara mandiri atau import dari file Excel.
           </p>
         </div>
 
@@ -273,7 +321,7 @@ export default function DataLengkapPage() {
         ) : data.length === 0 ? (
           <EmptyState
             title="Belum ada data loket"
-            description="Klik tombol 'Tambah Data Loket' untuk menambahkan data baru, atau import dari file Excel."
+            description="Klik tombol 'Tambah Data' untuk menambahkan data baru, atau import dari file Excel."
             icon={<Table2 className="w-8 h-8 text-slate-300" />}
           />
         ) : filteredData.length === 0 ? (
@@ -289,7 +337,7 @@ export default function DataLengkapPage() {
                 <thead className="bg-slate-50 text-slate-400 uppercase">
                   <tr>
                     <th className="p-2.5 font-semibold tracking-wider w-16">AKSI</th>
-                    {COLUMNS.map((col) => (
+                    {DISPLAY_COLUMNS.map((col) => (
                       <th key={col.key} className="p-2.5 font-semibold tracking-wider whitespace-nowrap">
                         {col.label}
                       </th>
@@ -298,7 +346,7 @@ export default function DataLengkapPage() {
                 </thead>
                 <tbody className="divide-y divide-[#E2E8F0] text-slate-600">
                   {filteredData.map((item) => (
-                    <tr key={item.id} className="hover:bg-slate-50/50 transition-colors">
+                    <tr key={item.id || item.no} className="hover:bg-slate-50/50 transition-colors">
                       <td className="p-2.5">
                         <div className="flex items-center gap-1">
                           <button
@@ -309,7 +357,7 @@ export default function DataLengkapPage() {
                             <Pencil className="w-3.5 h-3.5" />
                           </button>
                           <button
-                            onClick={() => setDeleteTarget(item.id)}
+                            onClick={() => setDeleteTarget(item.id || String(item.no))}
                             className="p-1 rounded-md hover:bg-slate-100 text-slate-400 hover:text-rose-500 transition-colors cursor-pointer"
                             title="Hapus"
                           >
@@ -317,7 +365,7 @@ export default function DataLengkapPage() {
                           </button>
                         </div>
                       </td>
-                      {COLUMNS.map((col) => (
+                      {DISPLAY_COLUMNS.map((col) => (
                         <td key={col.key} className="p-2.5 max-w-[220px] truncate">
                           <CellValue value={item[col.key]} />
                         </td>
@@ -341,16 +389,14 @@ export default function DataLengkapPage() {
         open={showForm}
         onClose={() => { setShowForm(false); setEditItem(null); }}
         onSave={editItem ? handleUpdate : handleAdd}
-        onSaveBatch={handleSaveBatch}
         editItem={editItem}
-        nextNo={nextNo}
       />
       <ConfirmDialog
         open={deleteTarget !== null}
         onClose={() => setDeleteTarget(null)}
         onConfirm={handleDelete}
-        title="Hapus Data Loket"
-        message="Apakah Anda yakin ingin menghapus data loket ini? Tindakan ini tidak dapat dibatalkan."
+        title="Hapus Data"
+        message="Apakah Anda yakin ingin menghapus data ini? Tindakan ini tidak dapat dibatalkan."
         confirmText="Hapus"
         variant="danger"
       />

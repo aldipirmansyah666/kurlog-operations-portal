@@ -26,7 +26,7 @@ export default function Home() {
   const pagination = usePagination(filters.filteredResi);
   const { toasts, showToast, removeToast } = useToast();
 
-  const submitting = false;
+  const [submitting, setSubmitting] = useState(false);
   const [followUpResi, setFollowUpResi] = useState<ResiItem | null>(null);
   const [showPasteModal, setShowPasteModal] = useState(false);
   const [showDeleteAll, setShowDeleteAll] = useState(false);
@@ -55,11 +55,14 @@ export default function Home() {
   }, []);
 
   const handleAddResi = async (data: Parameters<typeof addResi>[0]) => {
+    setSubmitting(true);
     try {
       await addResi(data);
       showToast('Resi berhasil ditambahkan', 'success');
     } catch {
       showToast('Gagal menambahkan resi', 'error');
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -185,7 +188,7 @@ export default function Home() {
         </div>
 
         {/* Add Form */}
-        <ResiForm onSubmit={handleAddResi} submitting={submitting} onSuccess={() => showToast('Resi ditambahkan', 'success')} />
+        <ResiForm onSubmit={handleAddResi} submitting={submitting} />
 
         {/* Search & Filters */}
         <SearchBar

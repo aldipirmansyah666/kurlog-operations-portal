@@ -54,7 +54,13 @@ export default function ReconcilePage() {
   const handleExportValid = () => {
     if (validRows.length === 0) return;
 
-    const exportData = validRows.map(({ rowIndex, isValid, reason, ...rest }) => rest);
+    const exportData = validRows.map((row) => {
+      const rest = { ...row } as Record<string, unknown>;
+      delete rest['rowIndex'];
+      delete rest['isValid'];
+      delete rest['reason'];
+      return rest;
+    });
     const ws = XLSX.utils.json_to_sheet(exportData);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Valid');

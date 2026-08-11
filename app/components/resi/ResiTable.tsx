@@ -17,6 +17,15 @@ function getFUStyle(count: number) {
   return 'bg-rose-50 text-rose-600 border border-rose-200';
 }
 
+function escapeHtml(text: string) {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 interface NotePopoverProps {
   text: string;
 }
@@ -33,7 +42,11 @@ function NotePopover({ text }: NotePopoverProps) {
       <p className="text-[11px] text-slate-500 line-clamp-1 max-w-[180px]">
         {text.split('\n').pop()}
       </p>
-      <button className="ml-1 p-0.5 rounded text-slate-300 hover:text-slate-500 transition-colors cursor-pointer">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="ml-1 p-0.5 rounded text-slate-300 hover:text-slate-500 transition-colors cursor-pointer"
+        title="Buka catatan"
+      >
         <MoreHorizontal className="w-3.5 h-3.5" />
       </button>
       {open && (
@@ -47,7 +60,7 @@ function NotePopover({ text }: NotePopoverProps) {
               onClick={() => {
                 const w = window.open('', '_blank');
                 if (w) {
-                  w.document.write(`<html><head><title>Catatan Resi</title><style>body{font-family:'JetBrains Mono',monospace;padding:24px;background:#f8fafc;color:#1e293b;white-space:pre-wrap;line-height:1.6;}</style></head><body>${text.replace(/\n/g, '<br>')}</body></html>`);
+                  w.document.write(`<html><head><title>Catatan Resi</title><style>body{font-family:'JetBrains Mono',monospace;padding:24px;background:#f8fafc;color:#1e293b;white-space:pre-wrap;line-height:1.6;}</style></head><body>${escapeHtml(text).replace(/\n/g, '<br>')}</body></html>`);
                   w.document.close();
                 }
               }}
@@ -98,6 +111,9 @@ function ResiRow({ item, index, selected, onToggleSelect, onStatusChange, onFoll
           onChange={(e) => onStatusChange(item.id!, e.target.value)}
           className="bg-transparent border-0 text-[11px] font-semibold cursor-pointer focus:outline-none p-0 text-slate-700"
         >
+          {!(STATUS_LIST as string[]).includes(item.status_resi) && (
+            <option value={item.status_resi} className="bg-white">{item.status_resi}</option>
+          )}
           {STATUS_LIST.map((s) => (
             <option key={s} value={s} className="bg-white">{s}</option>
           ))}

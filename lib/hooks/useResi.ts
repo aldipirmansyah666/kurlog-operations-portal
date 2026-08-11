@@ -2,14 +2,25 @@ import { useState, useCallback, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import type { ResiItem } from '@/lib/types';
 import type { RealtimeChannel } from '@supabase/supabase-js';
-import { isClosedStatus } from '@/lib/constants';
+import { isClosedStatus, CLOSED_STATUSES } from '@/lib/constants';
+
+const CLOSED_AUTO_DELETE_DAYS = 2;
 
 export function useResi() {
   const [resiList, setResiList] = useState<ResiItem[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const deleteExpiredClosed = useCallback(async () => {
+    const cutoff = new Date(Date.now() - CLOSED_AUTO_DELETE_DAYS * 24 * 60 * 60 * 1000).toISOString();
+    const { error } = await supabase
+      .from('resi')
+      .delete()
+      .in('status_resi', CLOSED_STATUSES)
+      .lt('closed_at', cutoff);
+    if (error) console.error('Auto-delete closed resi gagal:', error);
+  }, []);
+
   const fetchResi = useCallback(async () => {
-    setLoading(true);
     const { data, error } = await supabase
       .from('resi')
       .select('*')
@@ -17,9 +28,11 @@ export function useResi() {
 
     if (!error) setResiList(data || []);
     setLoading(false);
-  }, []);
+    await deleteExpiredClosed();
+  }, [deleteExpiredClosed]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional client-side CRUD fetch (see AGENTS.md)
     fetchResi();
   }, [fetchResi]);
 
@@ -42,7 +55,12 @@ export function useResi() {
 
   const addResi = useCallback(
     async (item: Omit<ResiItem, 'id' | 'created_at'>) => {
-      const { error } = await supabase.from('resi').insert([item]);
+      const { error } = await supabase.from('resi').insert([
+        {
+          ...item,
+          closed_at: isClosedStatus(item.status_resi) ? new Date().toISOString() : null,
+        },
+      ]);
       if (error) throw error;
       await fetchResi();
     },
@@ -51,7 +69,12 @@ export function useResi() {
 
   const addResiBatch = useCallback(
     async (items: Omit<ResiItem, 'id' | 'created_at'>[]) => {
-      const { error } = await supabase.from('resi').insert(items);
+      const { error } = await supabase.from('resi').insert(
+        items.map((item) => ({
+          ...item,
+          closed_at: isClosedStatus(item.status_resi) ? new Date().toISOString() : null,
+        }))
+      );
       if (error) throw error;
       await fetchResi();
     },
@@ -63,7 +86,11 @@ export function useResi() {
       const nextFU = isClosedStatus(newStatus) ? 'CLOSED' : 'PERLU FOLLOW UP';
       const { error } = await supabase
         .from('resi')
-        .update({ status_resi: newStatus, status_fu: nextFU })
+        .update({
+          status_resi: newStatus,
+          status_fu: nextFU,
+          closed_at: isClosedStatus(newStatus) ? new Date().toISOString() : null,
+        })
         .eq('id', id);
       if (error) throw error;
       await fetchResi();

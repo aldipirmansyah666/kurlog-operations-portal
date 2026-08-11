@@ -1,6 +1,7 @@
 export interface ResiItem {
   id?: number;
   created_at?: string;
+  closed_at?: string;
   tgl_tiket?: string;
   no_resi: string;
   agen: string;
@@ -127,6 +128,61 @@ export interface DataLengkapItem {
   catatan: string;
   waktuUpdate: string;
 }
+
+export interface DataLengkapUtamaItem {
+  id: string;
+  no: number;
+  created_at: string;
+  updated_at: string;
+  syarat: string;
+  pengajuan_survey_ke_pos: string;
+  pengajuan_pos: string;
+  pendaftaran_kurlog: string;
+  kelengkapan_perangkat: string;
+  aktivasi_kurlog: string;
+  aktivasi_sicepat: string;
+  training: string;
+  transaksi: string;
+  catatan: string;
+  waktu: string;
+  pos_ppob: string;
+  pos_only: string;
+  sicepat: string;
+  ppid: string;
+  nama_loket_onpays: string;
+  nama_loket_kurlog: string;
+  nama_pemilik: string;
+  alamat_pemilik_ktp: string;
+  alamat_lengkap_loket: string;
+  rt_rw: string;
+  kel_desa: string;
+  kec: string;
+  kab_kota: string;
+  propinsi: string;
+  kode_pos: string;
+  no_ktp: string;
+  no_npwp: string;
+  electric_area: string;
+  rekomendasi: string;
+  no_hp_pemilik: string;
+  no_hp_loket: string;
+  email: string;
+  no_dirian: string;
+  location_id: string;
+  user_mile: string;
+  password_mile: string;
+  regional: string;
+  kcu_kc: string;
+  nib: string;
+  no_kbli: string;
+  nomor_rekening: string;
+  nama_bank: string;
+  nama_pemilik_rekening: string;
+  latitude: string;
+  longitude: string;
+}
+
+export type DataLengkapUtamaValues = Omit<DataLengkapUtamaItem, 'id' | 'no' | 'created_at' | 'updated_at'>;
 
 export function emptyDataLengkap(no: number): DataLengkapItem {
   return {
