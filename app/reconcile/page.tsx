@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import * as XLSX from 'xlsx';
 import {
   FileCheck,
   Upload,
@@ -16,6 +15,7 @@ import {
 import type { ValidatedReconcileRow, ExcelValidationResult } from '@/lib/types';
 import { normalizeReconcileRows, validateAll, validateExcelFile } from '@/lib/reconcileValidator';
 import EmptyState from '@/app/components/ui/EmptyState';
+import { MAX_EXCEL_SIZE_BYTES, validateFileSize, validateExcelMagicBytes } from '@/lib/fileValidation';
 
 export default function ReconcilePage() {
   const [validRows, setValidRows] = useState<ValidatedReconcileRow[]>([]);
@@ -25,35 +25,52 @@ export default function ReconcilePage() {
   const [showRejected, setShowRejected] = useState(true);
   const [fileValidation, setFileValidation] = useState<ExcelValidationResult | null>(null);
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    const sizeErr = validateFileSize(file, MAX_EXCEL_SIZE_BYTES);
+    if (sizeErr) {
+      setUploadError(sizeErr);
+      e.target.value = '';
+      return;
+    }
+
     setIsProcessing(true);
-    const reader = new FileReader();
-    reader.onload = (evt) => {
-      try {
-        const bstr = evt.target?.result;
-        const workbook = XLSX.read(bstr, { type: 'binary' });
-        const sheet = workbook.Sheets[workbook.SheetNames[0]];
-        const jsonData = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet);
-        const normalized = normalizeReconcileRows(jsonData);
-        const { valid, rejected } = validateAll(normalized);
-        const fileResult = validateExcelFile(normalized);
-        setValidRows(valid);
-        setRejectedRows(rejected);
-        setFileValidation(fileResult);
-      } catch (err) {
-        console.error('Error reading Excel:', err);
+    setUploadError(null);
+    try {
+      const XLSX = await import('xlsx');
+      const buffer = await file.arrayBuffer();
+      if (!validateExcelMagicBytes(buffer)) {
+        setUploadError('Format file tidak valid. Harap upload file Excel (.xlsx/.xls) yang sah.');
+        return;
       }
+      const workbook = XLSX.read(buffer, { type: 'array' });
+      const sheetName = workbook.SheetNames[0];
+      if (!sheetName) throw new Error('No sheet found');
+      const sheet = workbook.Sheets[sheetName];
+      const jsonData = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: '' });
+      const normalized = normalizeReconcileRows(jsonData);
+      const { valid, rejected } = validateAll(normalized);
+      const fileResult = validateExcelFile(normalized);
+      setValidRows(valid);
+      setRejectedRows(rejected);
+      setFileValidation(fileResult);
+    } catch (err) {
+      console.error('Error reading Excel:', err);
+      setUploadError('Gagal membaca file Excel');
+    } finally {
       setIsProcessing(false);
-    };
-    reader.readAsBinaryString(file);
+      e.target.value = '';
+    }
   };
 
-  const handleExportValid = () => {
+  const handleExportValid = async () => {
     if (validRows.length === 0) return;
 
+    const XLSX = await import('xlsx');
     const exportData = validRows.map((row) => {
       const rest = { ...row } as Record<string, unknown>;
       delete rest['rowIndex'];
@@ -68,33 +85,50 @@ export default function ReconcilePage() {
   };
 
   return (
-    <main className="max-w-7xl mx-auto p-6 md:p-10 space-y-6">
+    <div className="space-y-6">
       {/* Header */}
-      <div className="bg-white rounded-xl border border-[#E2E8F0] p-5 space-y-3 shadow-sm">
-        <div className="flex items-center gap-2">
-          <FileCheck className="w-5 h-5 text-indigo-500" />
-          <h1 className="text-lg font-semibold text-slate-800">Validasi Reconcile</h1>
-        </div>
-        <p className="text-xs text-slate-400">
-          Upload file Excel reconcile untuk memvalidasi data sebelum dikirim ke KurLog.
-        </p>
-        <div>
-          <input
-            type="file"
-            accept=".xlsx,.xls"
-            onChange={handleFileUpload}
-            className="block w-full text-xs text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-medium file:bg-[#1E293B] file:text-white hover:file:bg-slate-700 file:cursor-pointer bg-slate-50 p-2 rounded-lg border border-[#E2E8F0] cursor-pointer"
-          />
+      <div className="rounded-2xl bg-white border border-slate-200/80 shadow-sm overflow-hidden">
+        <div className="h-1 w-full bg-gradient-to-r from-violet-600 to-indigo-600" />
+        <div className="p-6 space-y-4">
+          <div className="flex items-start gap-4">
+            <span className="hidden sm:flex h-11 w-11 rounded-xl bg-slate-900 text-white items-center justify-center shadow-sm shrink-0">
+              <FileCheck className="h-5 w-5" />
+            </span>
+            <div>
+              <h1 className="text-[18px] font-bold tracking-tight text-slate-900">Validasi Reconcile</h1>
+              <p className="text-sm text-slate-500 mt-1 leading-relaxed">
+                Upload file Excel reconcile untuk memvalidasi data sebelum dikirim ke KurLog. Maks {MAX_EXCEL_SIZE_BYTES / 1024 / 1024} MB.
+              </p>
+            </div>
+          </div>
+          {uploadError && (
+            <div className="px-3 py-2 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-medium">{uploadError}</div>
+          )}
+          <label className="group relative flex flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50/50 hover:bg-white hover:border-indigo-300 hover:shadow-sm p-6 text-center cursor-pointer transition-all duration-150">
+            <span className="h-10 w-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-indigo-600 shadow-sm group-hover:border-indigo-200">
+              <Upload className="h-5 w-5" />
+            </span>
+            <div>
+              <p className="text-sm font-semibold text-slate-900">Seret file atau klik untuk upload</p>
+              <p className="text-xs text-slate-500 mt-1">Mendukung .xlsx, .xls</p>
+            </div>
+            <input
+              type="file"
+              accept=".xlsx,.xls"
+              onChange={handleFileUpload}
+              className="absolute inset-0 opacity-0 cursor-pointer"
+            />
+          </label>
         </div>
       </div>
 
       {/* File Validation Status */}
       {fileValidation && (
-        <div className={`rounded-xl border p-4 shadow-sm ${
-          fileValidation.isFileValid
-            ? 'bg-emerald-50 border-emerald-200'
-            : 'bg-rose-50 border-rose-200'
-        }`}>
+        <div
+          className={`rounded-2xl border p-4 shadow-sm ${
+            fileValidation.isFileValid ? 'bg-emerald-50 border-emerald-200' : 'bg-rose-50 border-rose-200'
+          }`}
+        >
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               {fileValidation.isFileValid ? (
@@ -103,9 +137,11 @@ export default function ReconcilePage() {
                 <AlertTriangle className="w-5 h-5 text-rose-500" />
               )}
               <div>
-                <p className={`text-sm font-semibold ${
-                  fileValidation.isFileValid ? 'text-emerald-700' : 'text-rose-700'
-                }`}>
+                <p
+                  className={`text-sm font-semibold ${
+                    fileValidation.isFileValid ? 'text-emerald-700' : 'text-rose-700'
+                  }`}
+                >
                   {fileValidation.isFileValid ? 'FILE VALID / LOLOS CHECK' : 'DATA TIDAK SESUAI - Pengecekan Kategori Gagal'}
                 </p>
                 {!fileValidation.isFileValid && fileValidation.errors.length > 0 && (
@@ -119,26 +155,30 @@ export default function ReconcilePage() {
             </div>
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-2 text-[11px]">
-                <span className={`px-2 py-0.5 rounded-full font-semibold border ${
-                  fileValidation.isEC3Valid
-                    ? 'bg-emerald-100 text-emerald-700 border-emerald-300'
-                    : 'bg-rose-100 text-rose-700 border-rose-300'
-                }`}>
+                <span
+                  className={`px-2 py-0.5 rounded-full font-semibold border ${
+                    fileValidation.isEC3Valid
+                      ? 'bg-emerald-100 text-emerald-700 border-emerald-300'
+                      : 'bg-rose-100 text-rose-700 border-rose-300'
+                  }`}
+                >
                   EC3 {fileValidation.isEC3Valid ? '✓' : '✗'}
                 </span>
-                <span className={`px-2 py-0.5 rounded-full font-semibold border ${
-                  fileValidation.isPKHValid
-                    ? 'bg-emerald-100 text-emerald-700 border-emerald-300'
-                    : 'bg-rose-100 text-rose-700 border-rose-300'
-                }`}>
+                <span
+                  className={`px-2 py-0.5 rounded-full font-semibold border ${
+                    fileValidation.isPKHValid
+                      ? 'bg-emerald-100 text-emerald-700 border-emerald-300'
+                      : 'bg-rose-100 text-rose-700 border-rose-300'
+                  }`}
+                >
                   PKH {fileValidation.isPKHValid ? '✓' : '✗'}
                 </span>
               </div>
               <button
                 disabled={!fileValidation.isFileValid}
-                className={`inline-flex items-center gap-1.5 text-xs px-4 py-2 font-medium rounded-lg transition-colors ${
+                className={`inline-flex items-center gap-1.5 text-xs px-4 py-2 font-medium rounded-xl shadow-sm transition-colors ${
                   fileValidation.isFileValid
-                    ? 'bg-[#1E293B] hover:bg-slate-700 text-white cursor-pointer'
+                    ? 'bg-indigo-600 hover:bg-indigo-700 text-white cursor-pointer'
                     : 'bg-slate-200 text-slate-400 cursor-not-allowed'
                 }`}
               >
@@ -152,14 +192,17 @@ export default function ReconcilePage() {
 
       {/* Content */}
       {isProcessing ? (
-        <div className="bg-white rounded-xl border border-[#E2E8F0] p-12 text-center text-sm text-slate-400 shadow-sm">
-          Membaca file Excel...
+        <div className="rounded-2xl bg-white border border-slate-200 p-12 text-center shadow-sm">
+          <span className="inline-flex items-center gap-2 text-sm text-slate-500">
+            <span className="h-4 w-4 rounded-full border-2 border-slate-300 border-t-indigo-600 animate-spin" /> Membaca file
+            Excel…
+          </span>
         </div>
       ) : fileValidation ? (
         <div className="space-y-4">
           {/* Valid Section */}
-          <div className="bg-white rounded-xl border border-[#E2E8F0] overflow-hidden shadow-sm">
-            <div className="flex items-center justify-between p-4 border-b border-[#E2E8F0]">
+          <div className="rounded-2xl bg-white border border-slate-200/80 overflow-hidden shadow-sm">
+            <div className="flex items-center justify-between p-4 border-b border-slate-200">
               <button
                 onClick={() => setShowValid(!showValid)}
                 className="flex items-center gap-2 text-left cursor-pointer group"
@@ -178,7 +221,7 @@ export default function ReconcilePage() {
               {validRows.length > 0 && (
                 <button
                   onClick={handleExportValid}
-                  className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 bg-[#1E293B] hover:bg-slate-700 text-white font-medium rounded-lg transition-colors cursor-pointer"
+                  className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-xl shadow-sm transition-colors cursor-pointer"
                 >
                   <Download className="w-3.5 h-3.5" /> Export Excel
                 </button>
@@ -187,17 +230,17 @@ export default function ReconcilePage() {
             {showValid && validRows.length > 0 && (
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-[11px]">
-                  <thead className="bg-emerald-50 text-emerald-700 uppercase">
+                  <thead className="sticky top-0 z-10 bg-slate-50/80 backdrop-blur text-slate-500 uppercase text-[11px] tracking-wider border-b border-slate-200">
                     <tr>
-                      <th className="p-2.5">#</th>
-                      <th className="p-2.5">No Resi</th>
-                      <th className="p-2.5">Produk</th>
-                      <th className="p-2.5">Status</th>
+                      <th className="p-2.5 font-semibold">#</th>
+                      <th className="p-2.5 font-semibold">No Resi</th>
+                      <th className="p-2.5 font-semibold">Produk</th>
+                      <th className="p-2.5 font-semibold">Status</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-[#E2E8F0] text-slate-600">
+                  <tbody className="divide-y divide-slate-200 text-slate-600">
                     {validRows.map((row) => (
-                      <tr key={row.rowIndex} className="hover:bg-emerald-50/30 transition-colors">
+                      <tr key={row.rowIndex} className="hover:bg-slate-50/70 transition-colors">
                         <td className="p-2.5 text-slate-400">{row.rowIndex}</td>
                         <td className="p-2.5 font-mono font-semibold text-blue-600">{row.nomor_resi || '-'}</td>
                         <td className="p-2.5">{row.produk || '-'}</td>
@@ -215,8 +258,8 @@ export default function ReconcilePage() {
           </div>
 
           {/* Rejected Section */}
-          <div className="bg-white rounded-xl border border-[#E2E8F0] overflow-hidden shadow-sm">
-            <div className="flex items-center justify-between p-4 border-b border-[#E2E8F0]">
+          <div className="rounded-2xl bg-white border border-slate-200/80 overflow-hidden shadow-sm">
+            <div className="flex items-center justify-between p-4 border-b border-slate-200">
               <button
                 onClick={() => setShowRejected(!showRejected)}
                 className="flex items-center gap-2 text-left cursor-pointer group"
@@ -236,17 +279,17 @@ export default function ReconcilePage() {
             {showRejected && rejectedRows.length > 0 && (
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-[11px]">
-                  <thead className="bg-rose-50 text-rose-700 uppercase">
+                  <thead className="sticky top-0 z-10 bg-slate-50/80 backdrop-blur text-slate-500 uppercase text-[11px] tracking-wider border-b border-slate-200">
                     <tr>
-                      <th className="p-2.5">#</th>
-                      <th className="p-2.5">No Resi</th>
-                      <th className="p-2.5">Produk</th>
-                      <th className="p-2.5">Keterangan</th>
+                      <th className="p-2.5 font-semibold">#</th>
+                      <th className="p-2.5 font-semibold">No Resi</th>
+                      <th className="p-2.5 font-semibold">Produk</th>
+                      <th className="p-2.5 font-semibold">Keterangan</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-[#E2E8F0] text-slate-600">
+                  <tbody className="divide-y divide-slate-200 text-slate-600">
                     {rejectedRows.map((row) => (
-                      <tr key={row.rowIndex} className="hover:bg-rose-50/30 transition-colors">
+                      <tr key={row.rowIndex} className="hover:bg-slate-50/70 transition-colors">
                         <td className="p-2.5 text-slate-400">{row.rowIndex}</td>
                         <td className="p-2.5 font-mono font-semibold text-blue-600">{row.nomor_resi || '-'}</td>
                         <td className="p-2.5">{row.produk || '-'}</td>
@@ -266,6 +309,6 @@ export default function ReconcilePage() {
           icon={<Upload className="w-8 h-8 text-slate-300" />}
         />
       )}
-    </main>
+    </div>
   );
 }

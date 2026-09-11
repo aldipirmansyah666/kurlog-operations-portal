@@ -5,45 +5,36 @@ import type { RealtimeChannel } from '@supabase/supabase-js';
 import { sanitizeDataLengkapUtamaValues } from '@/lib/dataLengkapUtama';
 import { dataLengkapItemToUtamaValues, dataLengkapUtamaToItem } from '@/lib/dataLengkap';
 
-const PAGE_SIZE = 1000;
-const INSERT_CHUNK = 500;
-
 // Data Lengkap (loket) mengambil data dari master `data_lengkap_utama`.
-// Seluruh CRUD ditulis kembali ke tabel master sebagai single source of truth.
+// Mutations kini via server API (/api/data-lengkap-utama) using service_role, reads via anon or server.
 export function useDataLengkap() {
   const [data, setData] = useState<DataLengkapItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchData = useCallback(async () => {
-    const allRows: DataLengkapItem[] = [];
-    let from = 0;
-    let keepFetching = true;
-
-    while (keepFetching) {
-      const { data: rows, error } = await supabase
-        .from('data_lengkap_utama')
-        .select('*')
-        .order('no', { ascending: true })
-        .range(from, from + PAGE_SIZE - 1);
-
+    try {
+      const res = await fetch('/api/data-lengkap-utama', { cache: 'no-store' });
+      if (res.ok) {
+        const json = await res.json();
+        const rows = (json.data as DataLengkapUtamaItem[]) || [];
+        setData(rows.map(dataLengkapUtamaToItem));
+        setLoading(false);
+        return;
+      }
+      // Fallback to anon direct read
+      const { data: rows, error } = await supabase.from('data_lengkap_utama').select('*').order('no', { ascending: true });
       if (error) {
         console.error('Supabase fetch error:', error);
         setLoading(false);
         return;
       }
-
       const batch = (rows || []) as DataLengkapUtamaItem[];
-      allRows.push(...batch.map(dataLengkapUtamaToItem));
-
-      if (batch.length < PAGE_SIZE) {
-        keepFetching = false;
-      } else {
-        from += PAGE_SIZE;
-      }
+      setData(batch.map(dataLengkapUtamaToItem));
+      setLoading(false);
+    } catch (e) {
+      console.error('fetchData error:', e);
+      setLoading(false);
     }
-
-    setData(allRows);
-    setLoading(false);
   }, []);
 
   useEffect(() => {
@@ -54,50 +45,44 @@ export function useDataLengkap() {
   useEffect(() => {
     const channel: RealtimeChannel = supabase
       .channel('data-lengkap-changes')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'data_lengkap_utama' },
-        () => {
-          fetchData();
-        }
-      )
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'data_lengkap_utama' }, () => {
+        fetchData();
+      })
       .subscribe();
-
     return () => {
       supabase.removeChannel(channel);
     };
   }, [fetchData]);
 
-  const nextNo = useCallback(() => {
-    let max = 0;
-    for (const item of data) {
-      if (item.no > max) max = item.no;
-    }
-    return max + 1;
-  }, [data]);
-
   const addItem = useCallback(
     async (item: DataLengkapItem) => {
-      const { error } = await supabase.from('data_lengkap_utama').insert({
-        ...sanitizeDataLengkapUtamaValues(dataLengkapItemToUtamaValues(item)),
-        no: nextNo(),
+      const values = dataLengkapItemToUtamaValues(item);
+      const res = await fetch('/api/data-lengkap-utama', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ values }),
       });
-      if (error) throw error;
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j.error || 'Gagal tambah data');
+      }
       await fetchData();
     },
-    [nextNo, fetchData]
+    [fetchData]
   );
 
   const updateItem = useCallback(
     async (id: string, item: DataLengkapItem) => {
-      const { error } = await supabase
-        .from('data_lengkap_utama')
-        .update({
-          ...sanitizeDataLengkapUtamaValues(dataLengkapItemToUtamaValues(item)),
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', id);
-      if (error) throw error;
+      const values = dataLengkapItemToUtamaValues(item);
+      const res = await fetch('/api/data-lengkap-utama', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, values }),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j.error || 'Gagal update data');
+      }
       await fetchData();
     },
     [fetchData]
@@ -105,11 +90,11 @@ export function useDataLengkap() {
 
   const deleteItem = useCallback(
     async (id: string) => {
-      const { error } = await supabase
-        .from('data_lengkap_utama')
-        .delete()
-        .eq('id', id);
-      if (error) throw error;
+      const res = await fetch(`/api/data-lengkap-utama?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j.error || 'Gagal hapus data');
+      }
       await fetchData();
     },
     [fetchData]
@@ -117,26 +102,28 @@ export function useDataLengkap() {
 
   const importItems = useCallback(
     async (items: DataLengkapItem[]) => {
-      let no = nextNo();
-      for (let i = 0; i < items.length; i += INSERT_CHUNK) {
-        const chunk = items.slice(i, i + INSERT_CHUNK).map((item) => ({
-          ...sanitizeDataLengkapUtamaValues(dataLengkapItemToUtamaValues(item)),
-          no: no++,
-        }));
-        const { error } = await supabase.from('data_lengkap_utama').insert(chunk);
-        if (error) throw error;
+      const values = items.map((item) => sanitizeDataLengkapUtamaValues(dataLengkapItemToUtamaValues(item)) as unknown as Record<string, unknown>);
+      // Use batch endpoint
+      const res = await fetch('/api/data-lengkap-utama', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items: values }),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j.error || 'Gagal import');
       }
       await fetchData();
     },
-    [nextNo, fetchData]
+    [fetchData]
   );
 
   const deleteAll = useCallback(async () => {
-    const { error } = await supabase
-      .from('data_lengkap_utama')
-      .delete()
-      .neq('id', '00000000-0000-0000-0000-000000000000');
-    if (error) throw error;
+    const res = await fetch('/api/data-lengkap-utama?all=true', { method: 'DELETE' });
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({}));
+      throw new Error(j.error || 'Gagal hapus semua');
+    }
     await fetchData();
   }, [fetchData]);
 

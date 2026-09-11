@@ -1,35 +1,39 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
 import type { ResiItem } from '@/lib/types';
 import type { RealtimeChannel } from '@supabase/supabase-js';
-import { isClosedStatus, CLOSED_STATUSES } from '@/lib/constants';
-
-const CLOSED_AUTO_DELETE_DAYS = 2;
+import { isClosedStatus } from '@/lib/constants';
 
 export function useResi() {
   const [resiList, setResiList] = useState<ResiItem[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const deleteExpiredClosed = useCallback(async () => {
-    const cutoff = new Date(Date.now() - CLOSED_AUTO_DELETE_DAYS * 24 * 60 * 60 * 1000).toISOString();
-    const { error } = await supabase
-      .from('resi')
-      .delete()
-      .in('status_resi', CLOSED_STATUSES)
-      .lt('closed_at', cutoff);
-    if (error) console.error('Auto-delete closed resi gagal:', error);
-  }, []);
-
   const fetchResi = useCallback(async () => {
-    const { data, error } = await supabase
-      .from('resi')
-      .select('*')
-      .order('id', { ascending: false });
-
-    if (!error) setResiList(data || []);
-    setLoading(false);
-    await deleteExpiredClosed();
-  }, [deleteExpiredClosed]);
+    try {
+      // Prefer server API (authenticated) – falls back to anon if needed.
+      // After RLS migration, anon SELECT remains allowed for reads, but server API
+      // is the canonical path and also triggers expired-closed cleanup server-side.
+      const res = await fetch('/api/resi', { cache: 'no-store' });
+      if (res.ok) {
+        const json = await res.json();
+        setResiList((json.data as ResiItem[]) || []);
+        setLoading(false);
+        return;
+      }
+      // Fallback to direct supabase (anon) for backwards compat before migration
+      const { data, error } = await supabase.from('resi').select('*').order('id', { ascending: false });
+      if (error) {
+        console.error('Supabase fetch resi error:', error);
+        setLoading(false);
+        return;
+      }
+      setResiList(data || []);
+      setLoading(false);
+    } catch (e) {
+      console.error('fetchResi unexpected error:', e);
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional client-side CRUD fetch (see AGENTS.md)
@@ -39,15 +43,10 @@ export function useResi() {
   useEffect(() => {
     const channel: RealtimeChannel = supabase
       .channel('resi-changes')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'resi' },
-        () => {
-          fetchResi();
-        }
-      )
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'resi' }, () => {
+        fetchResi();
+      })
       .subscribe();
-
     return () => {
       supabase.removeChannel(channel);
     };
@@ -55,13 +54,15 @@ export function useResi() {
 
   const addResi = useCallback(
     async (item: Omit<ResiItem, 'id' | 'created_at'>) => {
-      const { error } = await supabase.from('resi').insert([
-        {
-          ...item,
-          closed_at: isClosedStatus(item.status_resi) ? new Date().toISOString() : null,
-        },
-      ]);
-      if (error) throw error;
+      const res = await fetch('/api/resi', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ item }),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j.error || 'Gagal menambahkan resi');
+      }
       await fetchResi();
     },
     [fetchResi]
@@ -69,13 +70,15 @@ export function useResi() {
 
   const addResiBatch = useCallback(
     async (items: Omit<ResiItem, 'id' | 'created_at'>[]) => {
-      const { error } = await supabase.from('resi').insert(
-        items.map((item) => ({
-          ...item,
-          closed_at: isClosedStatus(item.status_resi) ? new Date().toISOString() : null,
-        }))
-      );
-      if (error) throw error;
+      const res = await fetch('/api/resi', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items }),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j.error || 'Gagal import batch');
+      }
       await fetchResi();
     },
     [fetchResi]
@@ -83,16 +86,15 @@ export function useResi() {
 
   const updateStatus = useCallback(
     async (id: number, newStatus: string) => {
-      const nextFU = isClosedStatus(newStatus) ? 'CLOSED' : 'PERLU FOLLOW UP';
-      const { error } = await supabase
-        .from('resi')
-        .update({
-          status_resi: newStatus,
-          status_fu: nextFU,
-          closed_at: isClosedStatus(newStatus) ? new Date().toISOString() : null,
-        })
-        .eq('id', id);
-      if (error) throw error;
+      const res = await fetch('/api/resi', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, status_resi: newStatus }),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j.error || 'Gagal update status');
+      }
       await fetchResi();
     },
     [fetchResi]
@@ -100,23 +102,15 @@ export function useResi() {
 
   const addNote = useCallback(
     async (resi: ResiItem, note: string) => {
-      const timestamp = new Date().toLocaleString('id-ID', {
-        day: '2-digit',
-        month: '2-digit',
-        year: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
+      const res = await fetch('/api/resi', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: resi.id, addNote: note }),
       });
-      const entry = `[${timestamp}] ${note.trim()}`;
-      const updatedCatatan = resi.catatan
-        ? `${resi.catatan}\n${entry}`
-        : entry;
-
-      const { error } = await supabase
-        .from('resi')
-        .update({ catatan: updatedCatatan })
-        .eq('id', resi.id);
-      if (error) throw error;
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j.error || 'Gagal menambah catatan');
+      }
       await fetchResi();
     },
     [fetchResi]
@@ -124,11 +118,15 @@ export function useResi() {
 
   const updateNote = useCallback(
     async (id: number, newCatatan: string) => {
-      const { error } = await supabase
-        .from('resi')
-        .update({ catatan: newCatatan || null })
-        .eq('id', id);
-      if (error) throw error;
+      const res = await fetch('/api/resi', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, catatan: newCatatan }),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j.error || 'Gagal update catatan');
+      }
       await fetchResi();
     },
     [fetchResi]
@@ -136,31 +134,51 @@ export function useResi() {
 
   const deleteResi = useCallback(
     async (id: number) => {
-      const { error } = await supabase.from('resi').delete().eq('id', id);
-      if (error) throw error;
+      const res = await fetch(`/api/resi?id=${id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j.error || 'Gagal hapus resi');
+      }
       await fetchResi();
     },
     [fetchResi]
   );
 
   const deleteAllResi = useCallback(async () => {
-    const { error } = await supabase.from('resi').delete().neq('id', 0);
-    if (error) throw error;
+    const res = await fetch('/api/resi?all=true', { method: 'DELETE' });
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({}));
+      throw new Error(j.error || 'Gagal hapus semua');
+    }
     await fetchResi();
   }, [fetchResi]);
 
   const deleteResiBatch = useCallback(
     async (ids: number[]) => {
-      const { error } = await supabase.from('resi').delete().in('id', ids);
-      if (error) throw error;
+      if (ids.length === 0) return;
+      const res = await fetch('/api/resi', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids }),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j.error || 'Gagal hapus batch');
+      }
       await fetchResi();
     },
     [fetchResi]
   );
 
-  const totalCount = resiList.length;
-  const needFUCount = resiList.filter((i) => !isClosedStatus(i.status_resi)).length;
-  const doneCount = resiList.filter((i) => isClosedStatus(i.status_resi)).length;
+  const { totalCount, needFUCount, doneCount } = useMemo(() => {
+    let need = 0;
+    let done = 0;
+    for (const r of resiList) {
+      if (isClosedStatus(r.status_resi)) done++;
+      else need++;
+    }
+    return { totalCount: resiList.length, needFUCount: need, doneCount: done };
+  }, [resiList]);
 
   return {
     resiList,

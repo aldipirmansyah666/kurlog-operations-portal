@@ -1,9 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import { Pencil, Trash2, Lock, Clock, MoreHorizontal, ExternalLink } from 'lucide-react';
+import { Pencil, Trash2, Lock, Clock, MoreHorizontal, ExternalLink, ShieldCheck, Hash } from 'lucide-react';
 import { STATUS_LIST, isClosedStatus } from '@/lib/constants';
 import type { ResiItem } from '@/lib/types';
+import StatusBadge from '@/app/components/ui/StatusBadge';
 
 function getFUCount(catatan?: string) {
   if (!catatan || !catatan.trim()) return 0;
@@ -11,62 +12,46 @@ function getFUCount(catatan?: string) {
 }
 
 function getFUStyle(count: number) {
-  if (count === 0) return 'bg-slate-100 text-slate-400 border border-slate-200';
-  if (count === 1) return 'bg-amber-50 text-amber-600 border border-amber-200';
-  if (count === 2) return 'bg-orange-50 text-orange-600 border border-orange-200';
-  return 'bg-rose-50 text-rose-600 border border-rose-200';
+  if (count === 0) return 'bg-slate-50 text-slate-500 border-slate-200 ring-slate-200/50';
+  if (count === 1) return 'bg-amber-50 text-amber-700 border-amber-200 ring-amber-600/20';
+  if (count === 2) return 'bg-orange-50 text-orange-700 border-orange-200 ring-orange-600/20';
+  return 'bg-rose-50 text-rose-700 border-rose-200 ring-rose-600/20';
 }
 
 function escapeHtml(text: string) {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
-interface NotePopoverProps {
-  text: string;
-}
-
-function NotePopover({ text }: NotePopoverProps) {
+function NotePopover({ text }: { text: string }) {
   const [open, setOpen] = useState(false);
-
   return (
-    <div
-      className="relative inline-flex items-center"
-      onMouseEnter={() => setOpen(true)}
-      onMouseLeave={() => setOpen(false)}
-    >
-      <p className="text-[11px] text-slate-500 line-clamp-1 max-w-[180px]">
-        {text.split('\n').pop()}
-      </p>
+    <div className="relative inline-flex items-center" onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}>
+      <p className="text-xs text-slate-600 line-clamp-1 max-w-[200px] leading-relaxed">{text.split('\n').pop()}</p>
       <button
         onClick={() => setOpen((v) => !v)}
-        className="ml-1 p-0.5 rounded text-slate-300 hover:text-slate-500 transition-colors cursor-pointer"
+        className="ml-1 h-6 w-6 rounded-full bg-white border border-slate-200 shadow-sm text-slate-400 hover:text-slate-700 hover:border-slate-300 flex items-center justify-center active:scale-[0.98] transition-all cursor-pointer"
         title="Buka catatan"
       >
-        <MoreHorizontal className="w-3.5 h-3.5" />
+        <MoreHorizontal className="h-3 w-3" />
       </button>
       {open && (
-        <div className="absolute bottom-full left-0 mb-2 z-30 w-[360px] bg-white border border-[#E2E8F0] rounded-xl shadow-xl p-4 animate-fade-in">
-          <p className="text-xs font-medium text-slate-400 mb-2 uppercase tracking-wider">Catatan Lengkap</p>
-          <div className="bg-slate-50 border border-[#E2E8F0] rounded-lg p-3 max-h-48 overflow-y-auto">
-            <p className="text-xs text-slate-600 whitespace-pre-line leading-relaxed font-mono">{text}</p>
+        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-30 w-[380px] bg-white border border-slate-200 shadow-lg rounded-2xl p-4 animate-slide-in">
+          <p className="text-slate-700 font-semibold text-xs uppercase tracking-wider mb-2">Catatan Lengkap</p>
+          <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 max-h-48 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-300">
+            <p className="text-xs text-slate-700 whitespace-pre-line leading-relaxed font-mono">{text}</p>
           </div>
-          <div className="flex justify-end mt-3 pt-2 border-t border-[#E2E8F0]">
+          <div className="flex justify-end mt-3">
             <button
               onClick={() => {
                 const w = window.open('', '_blank');
                 if (w) {
-                  w.document.write(`<html><head><title>Catatan Resi</title><style>body{font-family:'JetBrains Mono',monospace;padding:24px;background:#f8fafc;color:#1e293b;white-space:pre-wrap;line-height:1.6;}</style></head><body>${escapeHtml(text).replace(/\n/g, '<br>')}</body></html>`);
+                  w.document.write(`<html><head><title>Catatan Resi</title><style>body{font-family:'JetBrains Mono',monospace;padding:24px;background:#f8fafc;color:#0f172a;white-space:pre-wrap;line-height:1.6;}</style></head><body>${escapeHtml(text).replace(/\n/g, '<br>')}</body></html>`);
                   w.document.close();
                 }
               }}
-              className="inline-flex items-center gap-1 text-[11px] text-blue-600 hover:text-blue-700 font-medium transition-colors cursor-pointer"
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-indigo-600 hover:text-indigo-700 active:scale-[0.98] transition-all cursor-pointer"
             >
-              <ExternalLink className="w-3 h-3" /> Open in new window
+              <ExternalLink className="h-3 w-3" /> Buka di tab baru
             </button>
           </div>
         </div>
@@ -75,87 +60,54 @@ function NotePopover({ text }: NotePopoverProps) {
   );
 }
 
-interface ResiRowProps {
-  item: ResiItem;
-  index: number;
-  selected: boolean;
-  onToggleSelect: (id: number) => void;
-  onStatusChange: (id: number, status: string) => void;
-  onFollowUp: (item: ResiItem) => void;
-  onDelete: (id: number) => void;
-}
-
-function ResiRow({ item, index, selected, onToggleSelect, onStatusChange, onFollowUp, onDelete }: ResiRowProps) {
+function ResiRow({ item, index, selected, onToggleSelect, onStatusChange, onFollowUp, onDelete }: { item: ResiItem; index: number; selected: boolean; onToggleSelect: (id: number) => void; onStatusChange: (id: number, status: string) => void; onFollowUp: (item: ResiItem) => void; onDelete: (id: number) => void }) {
   const fuCount = getFUCount(item.catatan);
   const closed = isClosedStatus(item.status_resi);
-
   return (
-    <tr className={`border-b border-[#E2E8F0] hover:bg-slate-50/80 transition-colors ${selected ? 'bg-blue-50/50' : ''}`}>
-      <td className="px-4 py-3 text-center">
-        <input
-          type="checkbox"
-          checked={selected}
-          onChange={() => onToggleSelect(item.id!)}
-          className="w-3.5 h-3.5 rounded border-slate-300 bg-white text-blue-600 focus:ring-blue-500/50 focus:ring-offset-0 cursor-pointer accent-blue-600"
-        />
+    <tr className={`group border-b border-slate-200 last:border-0 hover:bg-indigo-50/50 transition-colors ${selected ? 'bg-indigo-50/60 hover:bg-indigo-50' : index % 2 === 0 ? 'bg-white' : 'bg-slate-50/40'}`}>
+      <td className="px-3 py-2.5 text-center">
+        <input type="checkbox" checked={selected} onChange={() => onToggleSelect(item.id!)} className="h-4 w-4 rounded-md border-slate-300 bg-white text-indigo-600 focus:ring-indigo-500/20 focus:ring-2 cursor-pointer" />
       </td>
-      <td className="px-4 py-3 text-center text-xs text-slate-400 font-mono">{index + 1}</td>
-      <td className="px-4 py-3 text-xs font-mono text-slate-500">{item.tgl_tiket || '-'}</td>
-      <td className="px-4 py-3 text-xs font-mono font-semibold text-slate-800 tracking-wide">{item.no_resi}</td>
-      <td className="px-4 py-3 text-xs font-medium text-slate-700">{item.agen}</td>
-      <td className="px-4 py-3 text-xs font-semibold text-slate-600">{item.layanan || 'PE'}</td>
-      <td className="px-4 py-3 text-xs text-slate-500">{item.petugas}</td>
-      <td className="px-4 py-3">
-        <select
-          value={item.status_resi}
-          onChange={(e) => onStatusChange(item.id!, e.target.value)}
-          className="bg-transparent border-0 text-[11px] font-semibold cursor-pointer focus:outline-none p-0 text-slate-700"
-        >
-          {!(STATUS_LIST as string[]).includes(item.status_resi) && (
-            <option value={item.status_resi} className="bg-white">{item.status_resi}</option>
-          )}
-          {STATUS_LIST.map((s) => (
-            <option key={s} value={s} className="bg-white">{s}</option>
-          ))}
-        </select>
+      <td className="px-3 py-2.5 text-center text-xs font-mono text-slate-400">{String(index + 1).padStart(2, '0')}</td>
+      <td className="px-3 py-2.5 text-xs font-mono text-slate-600 whitespace-nowrap">{item.tgl_tiket || '—'}</td>
+      <td className="px-3 py-2.5">
+        <div className="inline-flex items-center gap-1.5">
+          <span className="h-6 w-6 rounded-lg bg-indigo-600 text-white flex items-center justify-center shadow-sm"><Hash className="h-3 w-3" /></span>
+          <span className="text-xs font-mono font-bold tracking-tight text-slate-900">{item.no_resi}</span>
+        </div>
       </td>
-      <td className="px-4 py-3 text-center">
-        <span
-          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${getFUStyle(fuCount)}`}
-        >
-          <Clock className="w-3 h-3" />
-          {fuCount}x
+      <td className="px-3 py-2.5 text-xs font-semibold tracking-tight text-slate-800 max-w-[160px] truncate">{item.agen}</td>
+      <td className="px-3 py-2.5"><span className="inline-flex px-2 py-1 rounded-full bg-white border border-slate-200 shadow-sm text-[11px] font-bold tracking-wide text-slate-700">{item.layanan || 'PE'}</span></td>
+      <td className="px-3 py-2.5 text-xs text-slate-600 max-w-[120px] truncate">{item.petugas}</td>
+      <td className="px-3 py-2.5">
+        <div className="min-w-[130px] flex items-center gap-1">
+          <StatusBadge status={item.status_resi} size="sm" />
+          <select value={item.status_resi} onChange={(e) => onStatusChange(item.id!, e.target.value)} className="ml-1 bg-transparent border-0 text-[11px] font-semibold text-slate-500 hover:text-slate-700 cursor-pointer focus:outline-none focus:ring-0">
+            {!(STATUS_LIST as string[]).includes(item.status_resi) && <option value={item.status_resi}>{item.status_resi}</option>}
+            {STATUS_LIST.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </div>
+      </td>
+      <td className="px-3 py-2.5 text-center">
+        <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-bold border shadow-sm ring-1 ${getFUStyle(fuCount)}`}>
+          <span className="h-1.5 w-1.5 rounded-full bg-current opacity-70" />
+          <Clock className="h-3 w-3" /> {fuCount}x
         </span>
       </td>
-      <td className="px-4 py-3 max-w-[200px]">
-        {item.catatan ? (
-          <NotePopover text={item.catatan} />
-        ) : (
-          <span className="text-[11px] text-slate-300 italic">-</span>
-        )}
+      <td className="px-3 py-2.5 max-w-[220px]">
+        {item.catatan ? <NotePopover text={item.catatan} /> : <span className="text-xs text-slate-300 italic">—</span>}
       </td>
-      <td className="px-4 py-3 text-center">
+      <td className="px-3 py-2.5">
         <div className="flex items-center justify-center gap-1">
           {closed ? (
-            <span className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-medium text-slate-400 bg-slate-100 rounded-lg border border-[#E2E8F0]">
-              <Lock className="w-3 h-3" />
-              Closed
-            </span>
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-slate-500 bg-slate-100 border border-slate-200 rounded-full"><Lock className="h-3 w-3" /> Closed</span>
           ) : (
-            <button
-              onClick={() => onFollowUp(item)}
-              className="p-1.5 rounded-lg bg-transparent hover:bg-blue-50 text-slate-300 hover:text-blue-500 border border-transparent hover:border-blue-200 transition-all duration-200 cursor-pointer hover:scale-110"
-              title="Follow Up"
-            >
-              <Pencil className="w-3.5 h-3.5" />
+            <button onClick={() => onFollowUp(item)} className="h-8 w-8 rounded-xl bg-white border border-slate-200 shadow-sm text-slate-500 hover:text-indigo-600 hover:border-indigo-200 hover:bg-indigo-50 flex items-center justify-center active:scale-[0.98] transition-all duration-150 focus-visible:ring-2 focus-visible:ring-indigo-500 cursor-pointer" title="Follow Up">
+              <Pencil className="h-3.5 w-3.5" />
             </button>
           )}
-          <button
-            onClick={() => onDelete(item.id!)}
-            className="p-1.5 rounded-lg bg-transparent hover:bg-rose-50 text-slate-300 hover:text-rose-500 border border-transparent hover:border-rose-200 transition-all duration-200 cursor-pointer hover:scale-110"
-            title="Hapus"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
+          <button onClick={() => onDelete(item.id!)} className="h-8 w-8 rounded-xl bg-white border border-slate-200 shadow-sm text-slate-400 hover:text-rose-600 hover:border-rose-200 hover:bg-rose-50 flex items-center justify-center active:scale-[0.98] transition-all duration-150 focus-visible:ring-2 focus-visible:ring-rose-500 cursor-pointer" title="Hapus">
+            <Trash2 className="h-3.5 w-3.5" />
           </button>
         </div>
       </td>
@@ -163,49 +115,23 @@ function ResiRow({ item, index, selected, onToggleSelect, onStatusChange, onFoll
   );
 }
 
-interface ResiTableProps {
-  items: ResiItem[];
-  loading: boolean;
-  selectedIds: Set<number>;
-  onToggleSelect: (id: number) => void;
-  onToggleAll: (ids: number[]) => void;
-  onStatusChange: (id: number, status: string) => void;
-  onFollowUp: (item: ResiItem) => void;
-  onDelete: (id: number) => void;
-}
-
-export default function ResiTable({
-  items,
-  loading,
-  selectedIds,
-  onToggleSelect,
-  onToggleAll,
-  onStatusChange,
-  onFollowUp,
-  onDelete,
-}: ResiTableProps) {
+export default function ResiTable({ items, loading, selectedIds, onToggleSelect, onToggleAll, onStatusChange, onFollowUp, onDelete }: { items: ResiItem[]; loading: boolean; selectedIds: Set<number>; onToggleSelect: (id: number) => void; onToggleAll: (ids: number[]) => void; onStatusChange: (id: number, status: string) => void; onFollowUp: (item: ResiItem) => void; onDelete: (id: number) => void }) {
   const headers = ['', 'NO', 'TGL TIKET', 'NO. RESI', 'AGEN', 'LAYANAN', 'PETUGAS', 'STATUS', 'FU', 'CATATAN', 'AKSI'];
   const visibleIds = items.filter((i) => i.id !== undefined).map((i) => i.id!);
   const allSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedIds.has(id));
 
   return (
-    <div className="bg-white rounded-xl border border-[#E2E8F0] shadow-sm overflow-hidden">
-      <div className="overflow-x-auto">
-        <table className="w-full text-left">
-          <thead className="bg-slate-50 border-b border-[#E2E8F0]">
+    <div className="overflow-hidden rounded-2xl bg-white border border-slate-200 shadow-sm">
+      <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-slate-300">
+        <table className="w-full text-left table-premium">
+          <thead className="sticky top-0 z-10 bg-slate-100/80 backdrop-blur-sm border-b border-slate-200">
             <tr>
               {headers.map((h) => (
-                <th
-                  key={h}
-                  className="px-4 py-3 text-[10px] font-semibold text-slate-400 uppercase tracking-wider"
-                >
+                <th key={h} className="px-3 py-3 whitespace-nowrap text-slate-700 font-semibold text-xs uppercase tracking-wider">
                   {h === '' ? (
-                    <input
-                      type="checkbox"
-                      checked={allSelected}
-                      onChange={() => onToggleAll(visibleIds)}
-                      className="w-3.5 h-3.5 rounded border-slate-300 bg-white text-blue-600 focus:ring-blue-500/50 focus:ring-offset-0 cursor-pointer accent-blue-600"
-                    />
+                    <input type="checkbox" checked={allSelected} onChange={() => onToggleAll(visibleIds)} className="h-4 w-4 rounded-md border-slate-300 bg-white text-indigo-600 focus:ring-indigo-500/20 cursor-pointer" />
+                  ) : h === 'STATUS' ? (
+                    <span className="inline-flex items-center gap-1"><ShieldCheck className="h-3 w-3" /> {h}</span>
                   ) : (
                     h
                   )}
@@ -213,31 +139,14 @@ export default function ResiTable({
               ))}
             </tr>
           </thead>
-          <tbody className="text-slate-700">
+          <tbody className="text-slate-800">
             {loading ? (
-              <tr>
-                <td colSpan={11} className="text-center py-12 text-slate-400 text-sm">
-                  Memuat data...
-                </td>
-              </tr>
+              <tr><td colSpan={11} className="text-center py-12"><span className="inline-flex items-center gap-2 text-sm text-slate-500"><span className="h-4 w-4 rounded-full border-2 border-slate-300 border-t-indigo-600 animate-spin" /> Memuat data…</span></td></tr>
             ) : items.length === 0 ? (
-              <tr>
-                <td colSpan={11} className="text-center py-12 text-slate-400 text-sm">
-                  Tidak ada data resi ditemukan.
-                </td>
-              </tr>
+              <tr><td colSpan={11} className="text-center py-12 text-sm text-slate-500">Tidak ada data resi ditemukan.</td></tr>
             ) : (
               items.map((item, i) => (
-                <ResiRow
-                  key={item.id}
-                  item={item}
-                  index={i}
-                  selected={item.id !== undefined && selectedIds.has(item.id)}
-                  onToggleSelect={onToggleSelect}
-                  onStatusChange={onStatusChange}
-                  onFollowUp={onFollowUp}
-                  onDelete={onDelete}
-                />
+                <ResiRow key={item.id} item={item} index={i} selected={item.id !== undefined && selectedIds.has(item.id)} onToggleSelect={onToggleSelect} onStatusChange={onStatusChange} onFollowUp={onFollowUp} onDelete={onDelete} />
               ))
             )}
           </tbody>

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { supabaseServer } from '@/lib/supabaseServer';
 import { getSession, hashPassword } from '@/lib/auth';
 
 export async function GET() {
@@ -9,7 +9,7 @@ export async function GET() {
       return NextResponse.json({ error: 'Akses ditolak' }, { status: 403 });
     }
 
-    const { data, error } = await supabase
+    const { data, error } = await supabaseServer
       .from('users')
       .select('id, name, username, role, created_at')
       .order('created_at', { ascending: true });
@@ -30,17 +30,26 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Akses ditolak' }, { status: 403 });
   }
 
-  const { name, username, password, role } = await req.json();
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: 'Payload tidak valid' }, { status: 400 });
+  }
+  const { name, username, password, role } = body as { name?: unknown; username?: unknown; password?: unknown; role?: unknown };
 
-  if (!name || !username || !password) {
+  if (typeof name !== 'string' || typeof username !== 'string' || typeof password !== 'string' || !name.trim() || !username.trim() || !password) {
     return NextResponse.json({ error: 'Semua field wajib diisi' }, { status: 400 });
+  }
+  if (name.length > 100 || username.length > 100) {
+    return NextResponse.json({ error: 'Nama/username terlalu panjang (max 100)' }, { status: 400 });
   }
 
   if (password.length < 6) {
     return NextResponse.json({ error: 'Password minimal 6 karakter' }, { status: 400 });
   }
 
-  const { data: existing } = await supabase
+  const { data: existing } = await supabaseServer
     .from('users')
     .select('id')
     .eq('username', username.trim())
@@ -51,7 +60,7 @@ export async function POST(req: Request) {
   }
 
   const hashedPassword = await hashPassword(password);
-  const { error } = await supabase.from('users').insert({
+  const { error } = await supabaseServer.from('users').insert({
     name: name.trim(),
     username: username.trim(),
     password: hashedPassword,
@@ -71,9 +80,15 @@ export async function PATCH(req: Request) {
     return NextResponse.json({ error: 'Akses ditolak' }, { status: 403 });
   }
 
-  const { id, password } = await req.json();
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: 'Payload tidak valid' }, { status: 400 });
+  }
+  const { id, password } = body as { id?: unknown; password?: unknown };
 
-  if (!id || !password) {
+  if (typeof id !== 'string' || typeof password !== 'string' || !id || !password) {
     return NextResponse.json({ error: 'ID dan password wajib diisi' }, { status: 400 });
   }
 
@@ -82,7 +97,7 @@ export async function PATCH(req: Request) {
   }
 
   const hashedPassword = await hashPassword(password);
-  const { error } = await supabase
+  const { error } = await supabaseServer
     .from('users')
     .update({ password: hashedPassword })
     .eq('id', id);
@@ -106,8 +121,11 @@ export async function DELETE(req: Request) {
   if (!id) {
     return NextResponse.json({ error: 'ID wajib diisi' }, { status: 400 });
   }
+  if (id === session.userId) {
+    return NextResponse.json({ error: 'Tidak dapat menghapus akun sendiri' }, { status: 400 });
+  }
 
-  const { error } = await supabase.from('users').delete().eq('id', id);
+  const { error } = await supabaseServer.from('users').delete().eq('id', id);
 
   if (error) {
     return NextResponse.json({ error: 'Gagal menghapus akun' }, { status: 500 });

@@ -117,168 +117,183 @@ export default function AdminUsersPage() {
   const roleBadge = (role: string) => {
     if (role === 'ADMIN') {
       return (
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-violet-50 text-violet-600 border border-violet-200">
-          <Shield className="w-2.5 h-2.5" /> ADMIN
+        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold tracking-wide bg-violet-50 text-violet-700 border border-violet-200">
+          <Shield className="w-3 h-3" /> ADMIN
         </span>
       );
     }
     return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-100 text-slate-600 border border-slate-200">
-        <User className="w-2.5 h-2.5" /> USER
+      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold tracking-wide bg-slate-50 text-slate-600 border border-slate-200">
+        <User className="w-3 h-3" /> USER
       </span>
     );
   };
 
   return (
-    <div className="max-w-5xl mx-auto p-6 md:p-10 space-y-6">
+    <div className="space-y-6 animate-page-in">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
-            <Users className="w-5 h-5 text-violet-500" />
-            Manajemen Pengguna
-          </h1>
-          <p className="text-xs text-slate-400 mt-0.5">
-            Kelola akun pengguna portal. Hanya Administrator yang dapat membuat akun baru.
-          </p>
+      <div className="rounded-2xl bg-white border border-slate-200/80 shadow-sm overflow-hidden">
+        <div className="h-1 w-full bg-gradient-to-r from-indigo-600 via-blue-600 to-sky-500" />
+        <div className="px-5 sm:px-6 py-5 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <div className="flex gap-4">
+            <div className="hidden sm:flex h-11 w-11 rounded-xl bg-slate-900 text-white items-center justify-center shadow-sm shrink-0">
+              <Users className="h-5 w-5" />
+            </div>
+            <div>
+              <h1 className="page-header-title text-[18px] tracking-tight text-slate-900 flex items-center gap-2">
+                Manajemen Pengguna
+                <span className="hidden sm:inline-flex px-2 py-0.5 rounded-full bg-indigo-50 border border-indigo-200 text-indigo-700 text-[10px] font-bold tracking-widest uppercase">Admin</span>
+              </h1>
+              <p className="text-sm text-slate-500 mt-1 leading-relaxed">
+                Kelola akun pengguna portal. Hanya Administrator yang dapat membuat akun baru.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => setShowForm(!showForm)}
+            className="inline-flex items-center gap-1.5 px-4 py-2.5 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-500 rounded-xl shadow-sm transition-all duration-150 focus-visible:ring-2 focus-visible:ring-indigo-500 cursor-pointer shrink-0"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            Tambah Akun
+          </button>
         </div>
-        <button
-          onClick={() => setShowForm(!showForm)}
-          className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium text-white bg-[#1E293B] hover:bg-slate-700 rounded-lg transition-colors cursor-pointer"
-        >
-          <Plus className="w-3.5 h-3.5" />
-          Tambah Akun
-        </button>
       </div>
 
       {/* Alerts */}
       {error && (
-        <div className="p-3 rounded-lg bg-rose-50 border border-rose-200 text-rose-600 text-xs animate-fade-in">
-          {error}
-          <button onClick={() => setError('')} className="ml-2 font-semibold cursor-pointer">✕</button>
+        <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-medium flex items-center justify-between gap-3 animate-fade-in">
+          <span>{error}</span>
+          <button onClick={() => setError('')} className="inline-flex h-7 w-7 items-center justify-center rounded-xl bg-white border border-rose-200 text-rose-500 hover:bg-rose-50 transition-colors cursor-pointer shrink-0">✕</button>
         </div>
       )}
       {success && (
-        <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-600 text-xs animate-fade-in">
-          {success}
-          <button onClick={() => setSuccess('')} className="ml-2 font-semibold cursor-pointer">✕</button>
+        <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-medium flex items-center justify-between gap-3 animate-fade-in">
+          <span>{success}</span>
+          <button onClick={() => setSuccess('')} className="inline-flex h-7 w-7 items-center justify-center rounded-xl bg-white border border-emerald-200 text-emerald-500 hover:bg-emerald-50 transition-colors cursor-pointer shrink-0">✕</button>
         </div>
       )}
 
       {/* Create Form */}
       {showForm && (
-        <div className="bg-white rounded-xl border border-[#E2E8F0] p-5 shadow-sm animate-fade-in">
-          <h3 className="text-sm font-semibold text-slate-800 mb-4">Tambah Akun Baru</h3>
-          <form onSubmit={handleCreate} className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-medium text-slate-500 mb-1">Nama Lengkap</label>
-              <input
-                type="text"
-                value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                required
-                className="w-full px-3 py-2 bg-slate-50 border border-[#E2E8F0] rounded-lg text-xs text-slate-800 focus:outline-none focus:border-blue-500"
-                placeholder="Nama lengkap"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-500 mb-1">Username / Email</label>
-              <input
-                type="text"
-                value={formData.username}
-                onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-                required
-                className="w-full px-3 py-2 bg-slate-50 border border-[#E2E8F0] rounded-lg text-xs text-slate-800 focus:outline-none focus:border-blue-500"
-                placeholder="Username atau email"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-500 mb-1">Password</label>
-              <input
-                type="password"
-                value={formData.password}
-                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                required
-                minLength={6}
-                className="w-full px-3 py-2 bg-slate-50 border border-[#E2E8F0] rounded-lg text-xs text-slate-800 focus:outline-none focus:border-blue-500"
-                placeholder="Minimal 6 karakter"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-500 mb-1">Role</label>
-              <select
-                value={formData.role}
-                onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-                className="w-full px-3 py-2 bg-slate-50 border border-[#E2E8F0] rounded-lg text-xs text-slate-800 focus:outline-none focus:border-blue-500"
-              >
-                <option value="USER">USER (CS / Petugas)</option>
-                <option value="ADMIN">ADMIN</option>
-              </select>
-            </div>
-            <div className="md:col-span-2 flex items-center gap-2">
-              <button
-                type="submit"
-                disabled={submitting}
-                className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-medium text-white bg-[#1E293B] hover:bg-slate-700 disabled:bg-slate-300 rounded-lg transition-colors cursor-pointer disabled:cursor-not-allowed"
-              >
-                {submitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
-                {submitting ? 'Menyimpan...' : 'Buat Akun'}
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowForm(false)}
-                className="px-4 py-2 text-xs font-medium text-slate-500 hover:text-slate-700 transition-colors cursor-pointer"
-              >
-                Batal
-              </button>
-            </div>
-          </form>
+        <div className="rounded-2xl bg-white border border-slate-200 shadow-sm overflow-hidden animate-fade-in">
+          <div className="h-1 w-full bg-gradient-to-r from-indigo-600 to-sky-500" />
+          <div className="p-6">
+            <h3 className="text-sm font-semibold tracking-tight text-slate-900 mb-4">Tambah Akun Baru</h3>
+            <form onSubmit={handleCreate} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-[11px] font-bold tracking-widest text-slate-500 uppercase mb-1.5">Nama Lengkap</label>
+                <input
+                  type="text"
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  required
+                  className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all"
+                  placeholder="Nama lengkap"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold tracking-widest text-slate-500 uppercase mb-1.5">Username / Email</label>
+                <input
+                  type="text"
+                  value={formData.username}
+                  onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                  required
+                  className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all"
+                  placeholder="Username atau email"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold tracking-widest text-slate-500 uppercase mb-1.5">Password</label>
+                <input
+                  type="password"
+                  value={formData.password}
+                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                  required
+                  minLength={6}
+                  className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all"
+                  placeholder="Minimal 6 karakter"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold tracking-widest text-slate-500 uppercase mb-1.5">Role</label>
+                <select
+                  value={formData.role}
+                  onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+                  className="w-full px-3.5 py-2.5 bg-white border border-slate-200 rounded-xl text-sm text-slate-900 focus:outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all"
+                >
+                  <option value="USER">USER — CS / Petugas</option>
+                  <option value="ADMIN">ADMIN</option>
+                </select>
+              </div>
+              <div className="md:col-span-2 flex items-center gap-2 pt-2">
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="inline-flex items-center gap-1.5 px-4 py-2.5 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-300 rounded-xl shadow-sm transition-all focus-visible:ring-2 focus-visible:ring-indigo-500 cursor-pointer disabled:cursor-not-allowed"
+                >
+                  {submitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+                  {submitting ? 'Menyimpan...' : 'Buat Akun'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowForm(false)}
+                  className="px-4 py-2.5 text-xs font-semibold text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 hover:text-slate-800 rounded-xl transition-colors cursor-pointer"
+                >
+                  Batal
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
 
       {/* Users Table */}
       {loading ? (
-        <div className="bg-white rounded-xl border border-[#E2E8F0] p-12 text-center text-sm text-slate-400 shadow-sm">
-          Memuat data pengguna...
+        <div className="rounded-2xl bg-white border border-slate-200 p-12 text-center shadow-sm">
+          <span className="inline-flex items-center gap-2 text-sm text-slate-500"><span className="h-4 w-4 rounded-full border-2 border-slate-300 border-t-indigo-600 animate-spin" /> Memuat data pengguna…</span>
         </div>
       ) : users.length === 0 ? (
-        <div className="bg-white rounded-xl border border-[#E2E8F0] p-12 text-center text-sm text-slate-400 shadow-sm">
-          Belum ada pengguna terdaftar.
+        <div className="rounded-2xl bg-white border border-slate-200 p-12 text-center shadow-sm">
+          <div className="mx-auto h-10 w-10 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-center mb-3">
+            <Users className="h-5 w-5 text-slate-400" />
+          </div>
+          <p className="text-sm font-medium text-slate-600">Belum ada pengguna terdaftar.</p>
+          <p className="text-xs text-slate-400 mt-1">Tambah akun baru untuk mulai mengelola akses portal.</p>
         </div>
       ) : (
-        <div className="bg-white rounded-xl border border-[#E2E8F0] overflow-hidden shadow-sm">
+        <div className="rounded-2xl bg-white border border-slate-200 overflow-hidden shadow-sm">
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-[11px]">
-              <thead className="bg-slate-50 text-slate-400 uppercase">
-                <tr>
-                  <th className="p-3">Nama</th>
-                  <th className="p-3">Username</th>
-                  <th className="p-3">Role</th>
-                  <th className="p-3">Dibuat</th>
-                  <th className="p-3 text-right">Aksi</th>
+            <table className="w-full text-left text-xs">
+              <thead className="bg-slate-50/70 text-slate-500">
+                <tr className="border-b border-slate-200">
+                  <th className="px-4 py-3 text-[11px] font-bold tracking-widest uppercase">Nama</th>
+                  <th className="px-4 py-3 text-[11px] font-bold tracking-widest uppercase">Username</th>
+                  <th className="px-4 py-3 text-[11px] font-bold tracking-widest uppercase">Role</th>
+                  <th className="px-4 py-3 text-[11px] font-bold tracking-widest uppercase">Dibuat</th>
+                  <th className="px-4 py-3 text-[11px] font-bold tracking-widest uppercase text-right">Aksi</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#E2E8F0] text-slate-600">
+              <tbody className="divide-y divide-slate-100 text-slate-700">
                 {users.map((user) => (
-                  <tr key={user.id} className="hover:bg-slate-50/50 transition-colors">
-                    <td className="p-3 font-medium text-slate-800">{user.name}</td>
-                    <td className="p-3 font-mono text-slate-500">{user.username}</td>
-                    <td className="p-3">{roleBadge(user.role)}</td>
-                    <td className="p-3 text-slate-400">
+                  <tr key={user.id} className="hover:bg-slate-50/60 transition-colors">
+                    <td className="px-4 py-3 font-semibold tracking-tight text-slate-900">{user.name}</td>
+                    <td className="px-4 py-3 font-mono text-[11px] text-slate-600">{user.username}</td>
+                    <td className="px-4 py-3">{roleBadge(user.role)}</td>
+                    <td className="px-4 py-3 text-slate-500">
                       {new Date(user.created_at).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })}
                     </td>
-                    <td className="p-3">
+                    <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-1">
                         <button
                           onClick={() => handleResetPassword(user.id, user.name)}
-                          className="p-1.5 rounded-md text-slate-400 hover:text-amber-600 hover:bg-amber-50 transition-colors cursor-pointer"
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-white border border-slate-200 text-slate-500 hover:text-amber-600 hover:bg-amber-50 hover:border-amber-200 transition-all cursor-pointer"
                           title="Reset Password"
                         >
                           <KeyRound className="w-3.5 h-3.5" />
                         </button>
                         <button
                           onClick={() => handleDelete(user.id, user.name)}
-                          className="p-1.5 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-white border border-slate-200 text-slate-500 hover:text-rose-600 hover:bg-rose-50 hover:border-rose-200 transition-all cursor-pointer"
                           title="Hapus Akun"
                         >
                           <Trash2 className="w-3.5 h-3.5" />

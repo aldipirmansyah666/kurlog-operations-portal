@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { DEFAULT_PAGE_SIZE, type PageSize } from '@/lib/constants';
 
 export function usePagination<T>(items: T[]) {
@@ -8,6 +8,13 @@ export function usePagination<T>(items: T[]) {
   const totalPages = Math.max(1, Math.ceil(items.length / pageSize));
 
   const safePage = Math.min(currentPage, totalPages);
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional pagination sync
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
 
   const paginatedItems = useMemo(() => {
     const start = (safePage - 1) * pageSize;

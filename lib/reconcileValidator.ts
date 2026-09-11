@@ -69,12 +69,13 @@ export function validateExcelFile(dataRows: ReconcileRow[]): ExcelValidationResu
   const ec3Rows = dataRows.filter((r) => String(r.produk || '').trim().toUpperCase() === 'EC3');
   const hasEC3_SHPE = ec3Rows.some((r) => String(r.nomor_resi || '').trim().toUpperCase().startsWith('SHPE'));
   const hasEC3_P260 = ec3Rows.some((r) => String(r.nomor_resi || '').trim().toUpperCase().startsWith('P260'));
-  const isEC3Valid = hasEC3_SHPE && hasEC3_P260;
+  // If no EC3 rows exist, consider EC3 category as valid (nothing to validate)
+  const isEC3Valid = ec3Rows.length === 0 ? true : hasEC3_SHPE && hasEC3_P260;
 
   const pkhRows = dataRows.filter((r) => String(r.produk || '').trim().toUpperCase() === 'PKH');
   const hasPKH_P260 = pkhRows.some((r) => String(r.nomor_resi || '').trim().toUpperCase().startsWith('P260'));
   const hasPKH_TTSPOS = pkhRows.some((r) => String(r.nomor_resi || '').trim().toUpperCase().startsWith('TTSPOS'));
-  const isPKHValid = hasPKH_P260 && hasPKH_TTSPOS;
+  const isPKHValid = pkhRows.length === 0 ? true : hasPKH_P260 && hasPKH_TTSPOS;
 
   const isFileValid = isEC3Valid && isPKHValid;
 

@@ -2,7 +2,6 @@
 
 import { useState, useMemo, useRef } from 'react';
 import { Plus, FileUp, Search, Trash2, Pencil, Database, X, Download, Table2, ClipboardPaste, Filter, RotateCcw } from 'lucide-react';
-import * as XLSX from 'xlsx';
 import { useDataLengkapUtama } from '@/lib/hooks/useDataLengkapUtama';
 import DataLengkapUtamaForm from '@/app/components/data-lengkap-utama/DataLengkapUtamaForm';
 import PasteImportModal from '@/app/components/data-lengkap-utama/PasteImportModal';
@@ -10,10 +9,12 @@ import EmptyState from '@/app/components/ui/EmptyState';
 import ToastContainer from '@/app/components/ui/Toast';
 import ConfirmDialog from '@/app/components/ui/ConfirmDialog';
 import Pagination from '@/app/components/ui/Pagination';
+import StatCard from '@/app/components/ui/StatCard';
 import { useToast } from '@/lib/hooks/useToast';
 import { usePagination } from '@/lib/hooks/usePagination';
 import { DATA_LENGKAP_UTAMA_COLUMNS, buildDataLengkapUtamaGroups, parseDataLengkapUtamaRows } from '@/lib/dataLengkapUtama';
 import type { DataLengkapUtamaItem, DataLengkapUtamaValues } from '@/lib/types';
+import { MAX_EXCEL_SIZE_BYTES, validateFileSize, validateExcelMagicBytes } from '@/lib/fileValidation';
 
 const SEARCH_KEYS: (keyof DataLengkapUtamaValues)[] = [
   'ppid',
@@ -237,11 +238,12 @@ export default function DataLengkapUtamaPage() {
     setShowForm(true);
   };
 
-  const handleExport = () => {
+  const handleExport = async () => {
     if (data.length === 0) {
       showToast('Tidak ada data untuk diexport', 'warning');
       return;
     }
+    const XLSX = await import('xlsx');
     const groupRow: string[] = [];
     const subRow: string[] = [];
     const merges: { s: { r: number; c: number }; e: { r: number; c: number } }[] = [];
@@ -278,36 +280,45 @@ export default function DataLengkapUtamaPage() {
     showToast(`Berhasil mengexport ${filteredData.length} data`, 'success');
   };
 
-  const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = async (evt) => {
-      try {
-        const wb = XLSX.read(evt.target?.result, { type: 'binary' });
-        // Sheet acuan utama: "Agen CUM". Fallback ke sheet pertama agar export
-        // aplikasi ini (sheet "Data Lengkap Utama") tetap bisa di-import ulang.
-        const wsname =
-          wb.SheetNames.find((n) => n.trim().toLowerCase() === 'agen cum') ?? wb.SheetNames[0];
-        const ws = wb.Sheets[wsname];
-        const rows = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1 });
+    const sizeErr = validateFileSize(file, MAX_EXCEL_SIZE_BYTES);
+    if (sizeErr) {
+      showToast(sizeErr, 'error');
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
 
-        const imported = parseDataLengkapUtamaRows(rows);
-
-        if (imported.length === 0) {
-          showToast('Tidak ada baris data yang ditemukan', 'warning');
-          return;
-        }
-
-        await importItems(imported);
-        showToast(`Berhasil mengimport ${imported.length} data`, 'success');
-      } catch (err) {
-        showToast(err instanceof Error ? err.message : 'Gagal membaca file Excel', 'error');
+    try {
+      const XLSX = await import('xlsx');
+      const buffer = await file.arrayBuffer();
+      if (!validateExcelMagicBytes(buffer)) {
+        showToast('Format file tidak valid. Harap upload file Excel (.xlsx/.xls) yang sah.', 'error');
+        return;
       }
-    };
-    reader.readAsBinaryString(file);
-    if (fileInputRef.current) fileInputRef.current.value = '';
+      const wb = XLSX.read(buffer, { type: 'array' });
+      const wsname =
+        wb.SheetNames.find((n) => n.trim().toLowerCase() === 'agen cum') ?? wb.SheetNames[0];
+      if (!wsname) throw new Error('Tidak ada sheet ditemukan');
+      const ws = wb.Sheets[wsname];
+      const rows = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1 });
+
+      const imported = parseDataLengkapUtamaRows(rows);
+
+      if (imported.length === 0) {
+        showToast('Tidak ada baris data yang ditemukan', 'warning');
+        return;
+      }
+
+      await importItems(imported);
+      showToast(`Berhasil mengimport ${imported.length} data`, 'success');
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Gagal membaca file Excel', 'error');
+    } finally {
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
   };
 
   const handlePasteImport = async (items: DataLengkapUtamaValues[]) => {
@@ -324,44 +335,55 @@ export default function DataLengkapUtamaPage() {
   const displayCount = filteredData.length;
 
   const filterSelectCls =
-    'w-full bg-white border border-[#E2E8F0] rounded-lg px-2 py-1.5 text-[11px] text-slate-700 focus:outline-none focus:border-blue-500 cursor-pointer';
+    'w-full bg-white border border-slate-200 rounded-xl px-2.5 py-2 text-[11px] text-slate-700 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10 cursor-pointer transition-colors';
 
   return (
     <>
       <ToastContainer toasts={toasts} onRemove={removeToast} />
-      <main className="max-w-7xl mx-auto p-6 md:p-10 space-y-6">
+      <div className="space-y-6">
         {/* Header Card */}
-        <div className="bg-white rounded-xl border border-[#E2E8F0] p-5 space-y-4 shadow-sm">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div className="flex items-center gap-2">
-              <Database className="w-5 h-5 text-purple-500" />
-              <h1 className="text-lg font-semibold text-slate-800">Data Lengkap Utama</h1>
+        <div className="rounded-2xl bg-white border border-slate-200/80 shadow-sm overflow-hidden">
+          <div className="h-1 w-full bg-gradient-to-r from-violet-600 via-indigo-600 to-blue-600" />
+          <div className="px-5 sm:px-6 py-5 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+            <div className="flex gap-4">
+              <div className="hidden sm:flex h-11 w-11 rounded-xl bg-slate-900 text-white items-center justify-center shadow-sm shrink-0">
+                <Database className="h-5 w-5" />
+              </div>
+              <div>
+                <h1 className="page-header-title text-[18px] text-slate-900 flex items-center gap-2">
+                  Data Lengkap Utama
+                  <span className="hidden sm:inline-flex px-2 py-0.5 rounded-full bg-violet-50 border border-violet-200 text-violet-700 text-[10px] font-bold tracking-widest uppercase">Master</span>
+                </h1>
+                <p className="text-sm text-slate-500 mt-1 leading-relaxed">
+                  Data master lengkap loket. Fitur Data Lengkap (loket) mengambil sebagian kolom dari sini. Kolom <span className="font-medium text-slate-700">NO, PPID, dan NAMA LOKET DI ONPAYS</span> terkunci saat scroll. Semua kolom opsional.
+                </p>
+              </div>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
               <button
                 onClick={() => { setEditItem(null); setShowForm(true); }}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium text-white bg-[#1E293B] hover:bg-slate-700 rounded-lg transition-colors cursor-pointer"
+                className="inline-flex items-center gap-1.5 px-4 py-2.5 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-500 rounded-xl shadow-sm transition-all duration-150 focus-visible:ring-2 focus-visible:ring-indigo-500 cursor-pointer"
               >
                 <Plus className="w-3.5 h-3.5" />
                 Tambah Data
               </button>
               <button
                 onClick={handleExport}
-                className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-slate-600 bg-white hover:bg-slate-50 border border-[#E2E8F0] rounded-lg transition-colors cursor-pointer"
+                className="inline-flex items-center gap-1.5 px-3.5 py-2.5 text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 hover:border-slate-300 rounded-xl transition-all duration-150 focus-visible:ring-2 focus-visible:ring-indigo-500 cursor-pointer"
               >
                 <Download className="w-3.5 h-3.5" />
                 Export Excel
               </button>
               <button
                 onClick={() => fileInputRef.current?.click()}
-                className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-slate-600 bg-white hover:bg-slate-50 border border-[#E2E8F0] rounded-lg transition-colors cursor-pointer"
+                className="inline-flex items-center gap-1.5 px-3.5 py-2.5 text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 hover:border-slate-300 rounded-xl transition-all duration-150 focus-visible:ring-2 focus-visible:ring-indigo-500 cursor-pointer"
               >
                 <FileUp className="w-3.5 h-3.5" />
                 Import Excel
               </button>
               <button
                 onClick={() => setShowPasteModal(true)}
-                className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-slate-600 bg-white hover:bg-slate-50 border border-[#E2E8F0] rounded-lg transition-colors cursor-pointer"
+                className="inline-flex items-center gap-1.5 px-3.5 py-2.5 text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 hover:border-slate-300 rounded-xl transition-all duration-150 focus-visible:ring-2 focus-visible:ring-indigo-500 cursor-pointer"
               >
                 <ClipboardPaste className="w-3.5 h-3.5" />
                 Import Copas
@@ -370,7 +392,7 @@ export default function DataLengkapUtamaPage() {
               {data.length > 0 && (
                 <button
                   onClick={() => setShowClearAll(true)}
-                  className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-rose-600 bg-white hover:bg-rose-50 border border-rose-200 rounded-lg transition-colors cursor-pointer"
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2.5 text-xs font-semibold text-rose-600 bg-white border border-rose-200 hover:bg-rose-50 hover:border-rose-300 rounded-xl transition-all duration-150 focus-visible:ring-2 focus-visible:ring-rose-500 cursor-pointer"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                   Hapus Semua
@@ -378,110 +400,108 @@ export default function DataLengkapUtamaPage() {
               )}
             </div>
           </div>
-          <p className="text-xs text-slate-400">
-            Data master lengkap loket. Fitur Data Lengkap (loket) akan mengambil sebagian kolom dari sini. Kolom NO, PPID,
-            dan NAMA LOKET DI ONPAYS terkunci saat scroll. Semua kolom bersifat opsional.
-          </p>
         </div>
 
         {/* Stat Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div className="bg-white p-4 rounded-xl border border-[#E2E8F0] border-l-4 border-l-purple-500 shadow-sm">
-            <p className="text-[11px] uppercase tracking-wider text-slate-400 font-semibold">Total Data Utama</p>
-            <h3 className="text-2xl font-bold text-slate-800 mt-1">{totalCount}</h3>
-          </div>
-          <div className="bg-white p-4 rounded-xl border border-[#E2E8F0] border-l-4 border-l-blue-500 shadow-sm">
-            <p className="text-[11px] uppercase tracking-wider text-slate-400 font-semibold">Ditampilkan</p>
-            <h3 className="text-2xl font-bold text-slate-800 mt-1">{displayCount}</h3>
-          </div>
-          <div className="bg-white p-4 rounded-xl border border-[#E2E8F0] border-l-4 border-l-emerald-500 shadow-sm">
-            <p className="text-[11px] uppercase tracking-wider text-slate-400 font-semibold">Pencarian / Filter</p>
-            <h3 className="text-lg font-bold text-slate-800 mt-1 truncate">
-              {searchQuery ? `"${searchQuery}"` : activeFilterCount > 0 ? `${activeFilterCount} filter aktif` : '-'}
-            </h3>
-          </div>
+          <StatCard label="Total Data Utama" value={totalCount} icon={<Database className="w-5 h-5" />} variant="default" />
+          <StatCard label="Ditampilkan" value={displayCount} icon={<Table2 className="w-5 h-5" />} variant="info" />
+          <StatCard
+            label="Pencarian / Filter"
+            value={searchQuery ? `"${searchQuery}"` : activeFilterCount > 0 ? `${activeFilterCount} filter aktif` : '—'}
+            icon={<Search className="w-5 h-5" />}
+            variant={searchQuery || activeFilterCount > 0 ? 'warning' : 'success'}
+          />
         </div>
 
         {/* Search & Filters */}
-        <div className="bg-white rounded-xl border border-[#E2E8F0] p-4 shadow-sm space-y-3">
-          <div className="flex items-center gap-3">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Cari PPID, Nama Loket, No HP, Email, NIB, Rekening, Regional..."
-                className="w-full bg-white border border-[#E2E8F0] rounded-lg pl-10 pr-4 py-2.5 text-sm text-slate-700 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
-              />
-              {searchQuery && (
+        <div className="rounded-2xl bg-white border border-slate-200/80 shadow-sm overflow-hidden">
+          <div className="px-4 sm:px-5 py-4 space-y-4">
+            <div className="flex flex-col xl:flex-row gap-3 xl:items-center">
+              <div className="relative flex-1 max-w-2xl">
+                <div className="pointer-events-none absolute inset-y-0 left-0 pl-3 flex items-center">
+                  <Search className="h-4 w-4 text-slate-400" />
+                </div>
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Cari PPID, Nama Loket, No HP, Email, NIB, Rekening, Regional..."
+                  className="w-full rounded-xl bg-slate-50 border border-slate-200 pl-9 pr-9 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all duration-150"
+                />
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery('')}
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
+                  >
+                    <span className="h-6 w-6 rounded-full bg-white border border-slate-200 flex items-center justify-center shadow-sm">
+                      <X className="h-3 w-3" />
+                    </span>
+                  </button>
+                )}
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
                 <button
-                  onClick={() => setSearchQuery('')}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                  onClick={() => setShowFilters((v) => !v)}
+                  className={`inline-flex items-center gap-1.5 px-3.5 py-2.5 text-xs font-semibold rounded-full border transition-all duration-150 focus-visible:ring-2 focus-visible:ring-indigo-500 cursor-pointer ${
+                    activeFilterCount > 0 || showFilters
+                      ? 'text-indigo-700 bg-indigo-50 border-indigo-200 hover:bg-indigo-100'
+                      : 'text-slate-700 bg-white border-slate-200 hover:bg-slate-50'
+                  }`}
                 >
-                  <X className="w-4 h-4" />
+                  <Filter className="w-3.5 h-3.5" />
+                  Filter{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
                 </button>
+                {activeFilterCount > 0 && (
+                  <button
+                    onClick={resetFilters}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2.5 text-xs font-semibold text-rose-600 bg-white border border-rose-200 hover:bg-rose-50 hover:border-rose-300 rounded-full transition-all duration-150 focus-visible:ring-2 focus-visible:ring-rose-500 cursor-pointer"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    Reset
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {showFilters && (
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 pt-4 border-t border-slate-200/80">
+                {FILTER_COLUMNS.map((f) => (
+                  <div key={f.key} className="space-y-1.5">
+                    <label className="text-[10px] uppercase tracking-widest text-slate-500 font-semibold">
+                      {f.label}
+                    </label>
+                    <select
+                      value={filters[f.key] ?? ''}
+                      onChange={(e) => setFilter(f.key, e.target.value)}
+                      className={filterSelectCls}
+                    >
+                      <option value="">Semua</option>
+                      <option value={EMPTY_FILTER_VALUE}>— Kosong —</option>
+                      {filterOptions[f.key].map((opt) => (
+                        <option key={opt} value={opt}>{opt}</option>
+                      ))}
+                    </select>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="flex items-center justify-between text-xs text-slate-500">
+              <span>
+                Menampilkan <strong className="text-slate-700">{displayCount}</strong> dari <strong className="text-slate-700">{totalCount}</strong> data utama
+              </span>
+              {displayCount === 0 && totalCount > 0 && (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-50 border border-amber-200 text-amber-700 text-[11px] font-semibold">Tidak ada data yang cocok</span>
               )}
             </div>
-            <button
-              onClick={() => setShowFilters((v) => !v)}
-              className={`inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg border transition-colors cursor-pointer ${
-                activeFilterCount > 0 || showFilters
-                  ? 'text-purple-600 bg-purple-50 border-purple-200'
-                  : 'text-slate-600 bg-white hover:bg-slate-50 border-[#E2E8F0]'
-              }`}
-            >
-              <Filter className="w-3.5 h-3.5" />
-              Filter{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
-            </button>
-            {activeFilterCount > 0 && (
-              <button
-                onClick={resetFilters}
-                className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-rose-600 bg-white hover:bg-rose-50 border border-rose-200 rounded-lg transition-colors cursor-pointer"
-              >
-                <RotateCcw className="w-3.5 h-3.5" />
-                Reset
-              </button>
-            )}
-          </div>
-
-          {showFilters && (
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 pt-3 border-t border-[#E2E8F0]">
-              {FILTER_COLUMNS.map((f) => (
-                <div key={f.key} className="space-y-1">
-                  <label className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">
-                    {f.label}
-                  </label>
-                  <select
-                    value={filters[f.key] ?? ''}
-                    onChange={(e) => setFilter(f.key, e.target.value)}
-                    className={filterSelectCls}
-                  >
-                    <option value="">Semua</option>
-                    <option value={EMPTY_FILTER_VALUE}>— Kosong —</option>
-                    {filterOptions[f.key].map((opt) => (
-                      <option key={opt} value={opt}>{opt}</option>
-                    ))}
-                  </select>
-                </div>
-              ))}
-            </div>
-          )}
-
-          <div className="flex items-center justify-between text-xs text-slate-400">
-            <span>
-              Menampilkan <strong className="text-slate-600">{displayCount}</strong> dari <strong className="text-slate-600">{totalCount}</strong> data utama
-            </span>
-            {displayCount === 0 && totalCount > 0 && (
-              <span className="text-amber-500">Tidak ada data yang cocok</span>
-            )}
           </div>
         </div>
 
         {/* Table */}
         {loading ? (
-          <div className="bg-white rounded-xl border border-[#E2E8F0] p-12 text-center text-sm text-slate-400 shadow-sm">
-            Memuat data...
+          <div className="rounded-2xl bg-white border border-slate-200/80 shadow-sm p-12 text-center">
+            <span className="inline-flex items-center gap-2 text-sm text-slate-500"><span className="h-4 w-4 rounded-full border-2 border-slate-300 border-t-indigo-600 animate-spin" /> Memuat data...</span>
           </div>
         ) : data.length === 0 ? (
           <EmptyState
@@ -496,132 +516,130 @@ export default function DataLengkapUtamaPage() {
             icon={<Search className="w-8 h-8 text-slate-300" />}
           />
         ) : (
-          <div className="bg-white rounded-xl border border-[#E2E8F0] overflow-hidden shadow-sm">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-[11px] border-collapse">
-                <thead className="text-slate-400 uppercase">
-                  <tr>
-                    <th
-                      rowSpan={2}
-                      style={{
-                        position: 'sticky',
-                        left: 0,
-                        width: AKSI_WIDTH,
-                        minWidth: AKSI_WIDTH,
-                        maxWidth: AKSI_WIDTH,
-                        zIndex: 40,
-                      }}
-                      className="p-2.5 font-semibold tracking-wider bg-slate-50 text-center"
-                    >
-                      AKSI
-                    </th>
-                    {HEADER_GROUPS.map((group) => {
-                      if (group.label === '') {
-                        return group.columns.map((col) => (
-                          <th
-                            key={col.key}
-                            colSpan={1}
-                            style={{
-                              ...colFixedWidthStyle(col.key),
-                              ...frozenHeaderStyle(col.key, 30),
-                            }}
-                            className={`p-2.5 font-semibold tracking-wider whitespace-nowrap border-l border-[#E2E8F0] ${
-                              isFrozen(col.key) ? 'bg-slate-100' : 'bg-slate-100/70'
-                            }`}
-                          >
-                            {group.label}
-                          </th>
-                        ));
-                      }
-                      const firstCol = group.columns[0];
-                      const frozen = isFrozen(firstCol.key);
-                      return (
-                        <th
-                          key={group.label || firstCol.key}
-                          colSpan={group.columns.length}
-                          style={frozenHeaderStyle(firstCol.key, 30)}
-                          className={`p-2.5 font-semibold tracking-wider whitespace-nowrap text-center border-l border-[#E2E8F0] ${
-                            frozen ? 'bg-slate-100' : 'bg-slate-100/70'
-                          }`}
-                        >
-                          {group.label}
-                        </th>
-                      );
-                    })}
-                  </tr>
-                  <tr>
-                    {DATA_LENGKAP_UTAMA_COLUMNS.map((col) => {
-                      const frozen = isFrozen(col.key);
-                      const fixedWidth = Boolean(FIXED_WIDTHS[col.key]);
-                      return (
-                        <th
-                          key={col.key}
-                          style={{
-                            ...colFixedWidthStyle(col.key),
-                            ...frozenHeaderStyle(col.key, 20),
-                          }}
-                          className={`p-2.5 font-semibold tracking-wider border-l border-[#E2E8F0] ${
-                            frozen ? 'bg-slate-50' : ''
-                          } ${fixedWidth ? 'break-words leading-tight' : 'whitespace-nowrap'}`}
-                        >
-                          {col.label}
-                        </th>
-                      );
-                    })}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[#E2E8F0] text-slate-600">
-                  {pagination.paginatedItems.map((item) => (
-                    <tr key={item.id} className="hover:bg-slate-50/50 transition-colors">
-                      <td
+          <div className="space-y-3">
+            <div className="rounded-2xl bg-white border border-slate-200/80 shadow-sm overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-[11px] border-collapse table-premium">
+                  <thead className="text-slate-500 sticky top-0 z-20">
+                    <tr>
+                      <th
+                        rowSpan={2}
                         style={{
                           position: 'sticky',
                           left: 0,
                           width: AKSI_WIDTH,
                           minWidth: AKSI_WIDTH,
                           maxWidth: AKSI_WIDTH,
-                          zIndex: 10,
-                          backgroundColor: '#FFFFFF',
+                          zIndex: 40,
                         }}
-                        className="p-2.5"
+                        className="p-2.5 py-2.5 font-semibold tracking-wider bg-slate-50/80 backdrop-blur supports-[backdrop-filter]:bg-slate-50/80 text-center border-b border-slate-200/80"
                       >
-                        <div className="flex items-center gap-1">
-                          <button
-                            onClick={() => handleEdit(item)}
-                            className="p-1 rounded-md hover:bg-slate-100 text-slate-400 hover:text-blue-600 transition-colors cursor-pointer"
-                            title="Edit"
-                          >
-                            <Pencil className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={() => setDeleteTarget(item.id)}
-                            className="p-1 rounded-md hover:bg-slate-100 text-slate-400 hover:text-rose-500 transition-colors cursor-pointer"
-                            title="Hapus"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </td>
-                      {DATA_LENGKAP_UTAMA_COLUMNS.map((col) => {
-                        const frozen = isFrozen(col.key);
+                        AKSI
+                      </th>
+                      {HEADER_GROUPS.map((group) => {
+                        if (group.label === '') {
+                          return group.columns.map((col) => (
+                            <th
+                              key={col.key}
+                              colSpan={1}
+                              style={{
+                                ...colFixedWidthStyle(col.key),
+                                ...frozenHeaderStyle(col.key, 30),
+                              }}
+                              className={`p-2.5 py-2.5 font-semibold tracking-wider whitespace-nowrap border-l border-slate-200/80 border-b border-slate-200/80 ${
+                                isFrozen(col.key) ? 'bg-slate-50/80 backdrop-blur supports-[backdrop-filter]:bg-slate-50/80' : 'bg-slate-50/80 backdrop-blur supports-[backdrop-filter]:bg-slate-50/80'
+                              }`}
+                            >
+                              {group.label}
+                            </th>
+                          ));
+                        }
+                        const firstCol = group.columns[0];
                         return (
-                          <td
-                            key={col.key}
-                            style={cellStyle(col.key)}
-                            className={`p-2.5 border-l border-[#E2E8F0]/60 ${
-                              frozen ? 'truncate shadow-[1px_0_0_#E2E8F0]' : 'max-w-[220px] truncate'
-                            }`}
+                          <th
+                            key={group.label || firstCol.key}
+                            colSpan={group.columns.length}
+                            style={frozenHeaderStyle(firstCol.key, 30)}
+                            className="p-2.5 py-2.5 font-semibold tracking-wider whitespace-nowrap text-center border-l border-slate-200/80 border-b border-slate-200/80 bg-slate-50/80 backdrop-blur supports-[backdrop-filter]:bg-slate-50/80"
                           >
-                            <CellValue value={item[col.key]} />
-                          </td>
+                            {group.label}
+                          </th>
                         );
                       })}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                    <tr>
+                      {DATA_LENGKAP_UTAMA_COLUMNS.map((col) => {
+                        const fixedWidth = Boolean(FIXED_WIDTHS[col.key]);
+                        return (
+                          <th
+                            key={col.key}
+                            style={{
+                              ...colFixedWidthStyle(col.key),
+                              ...frozenHeaderStyle(col.key, 20),
+                            }}
+                            className={`p-2.5 py-2.5 font-semibold tracking-wider border-l border-slate-200/80 border-b border-slate-200/80 bg-slate-50/80 backdrop-blur supports-[backdrop-filter]:bg-slate-50/80 ${
+                              fixedWidth ? 'break-words leading-tight' : 'whitespace-nowrap'
+                            }`}
+                          >
+                            {col.label}
+                          </th>
+                        );
+                      })}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200/70 text-slate-700">
+                    {pagination.paginatedItems.map((item) => (
+                      <tr key={item.id} className="hover:bg-slate-50 transition-colors">
+                        <td
+                          style={{
+                            position: 'sticky',
+                            left: 0,
+                            width: AKSI_WIDTH,
+                            minWidth: AKSI_WIDTH,
+                            maxWidth: AKSI_WIDTH,
+                            zIndex: 10,
+                            backgroundColor: '#FFFFFF',
+                          }}
+                          className="p-2.5 py-2.5"
+                        >
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={() => handleEdit(item)}
+                              className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-indigo-600 transition-colors cursor-pointer focus-visible:ring-2 focus-visible:ring-indigo-500"
+                              title="Edit"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => setDeleteTarget(item.id)}
+                              className="p-1.5 rounded-lg hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-colors cursor-pointer focus-visible:ring-2 focus-visible:ring-rose-500"
+                              title="Hapus"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </td>
+                        {DATA_LENGKAP_UTAMA_COLUMNS.map((col) => {
+                          const frozen = isFrozen(col.key);
+                          return (
+                            <td
+                              key={col.key}
+                              style={cellStyle(col.key)}
+                              className={`p-2.5 py-2.5 border-l border-slate-200/60 ${
+                                frozen ? 'truncate shadow-[1px_0_0_rgba(226,232,240,0.8)]' : 'max-w-[220px] truncate'
+                              }`}
+                            >
+                              <CellValue value={item[col.key]} />
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
-            <div className="px-4 border-t border-[#E2E8F0] bg-slate-50/50">
+            <div className="rounded-2xl bg-white border border-slate-200/80 shadow-sm px-2">
               <Pagination
                 currentPage={pagination.currentPage}
                 totalPages={pagination.totalPages}
@@ -637,13 +655,13 @@ export default function DataLengkapUtamaPage() {
                 hasNext={pagination.hasNext}
               />
             </div>
-            <div className="px-4 py-2.5 text-xs text-slate-400 border-t border-[#E2E8F0] bg-slate-50/50 flex items-center justify-between">
+            <div className="px-1 py-1 text-xs text-slate-400 flex items-center justify-between">
               <span>Total {displayCount} data utama</span>
               <span className="text-[10px]">{DATA_LENGKAP_UTAMA_COLUMNS.length} kolom ditampilkan</span>
             </div>
           </div>
         )}
-      </main>
+      </div>
 
       {/* Modals */}
       <DataLengkapUtamaForm

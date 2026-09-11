@@ -16,6 +16,13 @@ function LoginForm() {
   const [loading, setLoading] = useState(false);
   const [focusedField, setFocusedField] = useState<string | null>(null);
 
+  const sanitizeRedirect = (r: string) => {
+    if (!r.startsWith('/') || r.startsWith('//')) return '/';
+    // disallow protocol hijack
+    if (r.includes('://')) return '/';
+    return r;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -35,7 +42,7 @@ function LoginForm() {
         return;
       }
 
-      router.push(redirect);
+      router.push(sanitizeRedirect(redirect));
       router.refresh();
     } catch {
       setError('Terjadi kesalahan jaringan. Silakan coba lagi.');

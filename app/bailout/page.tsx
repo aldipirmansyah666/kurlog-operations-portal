@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import * as XLSX from 'xlsx';
 import {
   Copy,
   Check,
@@ -16,6 +15,7 @@ import {
 } from 'lucide-react';
 import type { BailoutRow } from '@/lib/types';
 import EmptyState from '@/app/components/ui/EmptyState';
+import { MAX_EXCEL_SIZE_BYTES, validateFileSize, validateExcelMagicBytes } from '@/lib/fileValidation';
 
 const INDONESIAN_MONTHS = [
   'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
@@ -97,25 +97,41 @@ export default function BailoutPage() {
 
   const expandAll = () => setCollapsedItems({});
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    const sizeErr = validateFileSize(file, MAX_EXCEL_SIZE_BYTES);
+    if (sizeErr) {
+      setUploadError(sizeErr);
+      e.target.value = '';
+      return;
+    }
+
     setIsProcessing(true);
-    const reader = new FileReader();
-    reader.onload = (evt) => {
-      try {
-        const bstr = evt.target?.result;
-        const workbook = XLSX.read(bstr, { type: 'binary' });
-        const sheet = workbook.Sheets[workbook.SheetNames[0]];
-        const jsonData = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet);
-        setData(normalizeRows(jsonData));
-      } catch (err) {
-        console.error('Error reading Excel:', err);
+    setUploadError(null);
+    try {
+      const XLSX = await import('xlsx');
+      const buffer = await file.arrayBuffer();
+      if (!validateExcelMagicBytes(buffer)) {
+        setUploadError('Format file tidak valid. Harap upload file Excel (.xlsx/.xls) yang sah.');
+        return;
       }
+      const workbook = XLSX.read(buffer, { type: 'array' });
+      const sheetName = workbook.SheetNames[0];
+      if (!sheetName) throw new Error('No sheet found');
+      const sheet = workbook.Sheets[sheetName];
+      const jsonData = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: '' });
+      setData(normalizeRows(jsonData));
+    } catch (err) {
+      console.error('Error reading Excel:', err);
+      setUploadError('Gagal membaca file Excel');
+    } finally {
       setIsProcessing(false);
-    };
-    reader.readAsBinaryString(file);
+      e.target.value = '';
+    }
   };
 
   const handlePasteSubmit = () => {
@@ -123,20 +139,26 @@ export default function BailoutPage() {
     setData(parsed);
   };
 
-  const handleCopy = (text: string, idx: number) => {
-    navigator.clipboard.writeText(text);
+  const handleCopy = async (text: string, idx: number) => {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+    }
     setCopiedIdx(idx);
     setTimeout(() => setCopiedIdx(null), 2000);
   };
 
-  const yesterday = new Date();
-  yesterday.setDate(yesterday.getDate() - 1);
-  const dateStr = formatIDDate(yesterday);
-
-  const totalMinus = data.reduce((sum, row) => sum + parseBailoutValue(row['BAILOUT']), 0);
-
   const pickerDateObj = new Date(bailoutDate + 'T00:00:00');
   const isWeekend = !isNaN(pickerDateObj.getTime()) && (pickerDateObj.getDay() === 0 || pickerDateObj.getDay() === 6);
+  const dateStr = !isNaN(pickerDateObj.getTime()) ? formatIDDate(pickerDateObj) : formatIDDate(new Date());
+
+  const totalMinus = data.reduce((sum, row) => sum + parseBailoutValue(row['BAILOUT']), 0);
 
   const WEEKEND_EXCLUDED_AGENTS = ['TRINERGI UTAMA JAYA'];
 
@@ -182,130 +204,76 @@ export default function BailoutPage() {
   };
 
   return (
-    <main className="max-w-7xl mx-auto p-6 md:p-10 space-y-6">
+    <div className="space-y-6">
       {/* Header */}
-      <div className="bg-white rounded-xl border border-[#E2E8F0] p-5 space-y-3 shadow-sm">
-        <div className="flex items-center gap-2">
-          <AlertTriangle className="w-5 h-5 text-amber-500" />
-          <h1 className="text-lg font-semibold text-slate-800">Informasi Bailout</h1>
-        </div>
-        <p className="text-xs text-slate-400">
-          Upload file Excel atau paste data untuk membuat template pesan pengingat bailout per agen.
-        </p>
+      <div className="rounded-2xl bg-white border border-slate-200/80 shadow-sm overflow-hidden">
+        <div className="h-1 w-full bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500" />
+        <div className="p-6 space-y-4">
+          <div className="flex items-start gap-4">
+            <span className="hidden sm:flex h-11 w-11 rounded-xl bg-slate-900 text-white items-center justify-center shadow-sm shrink-0"><AlertTriangle className="h-5 w-5" /></span>
+            <div>
+              <h1 className="page-header-title text-[18px] text-slate-900">Informasi Bailout</h1>
+              <p className="text-sm text-slate-500 mt-1 leading-relaxed">Upload Excel atau paste data untuk template pesan pengingat bailout per agen. Maks {MAX_EXCEL_SIZE_BYTES / 1024 / 1024} MB.</p>
+            </div>
+          </div>
+          {uploadError && <div className="px-3 py-2 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-medium">{uploadError}</div>}
 
         {/* Input Mode Tabs */}
-        <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg w-fit">
-          <button
-            onClick={() => setInputMode('file')}
-            className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md transition-colors cursor-pointer ${
-              inputMode === 'file'
-                ? 'bg-[#1E293B] text-white'
-                : 'text-slate-400 hover:text-slate-600'
-            }`}
-          >
-            <Upload className="w-3.5 h-3.5" /> Upload Excel
-          </button>
-          <button
-            onClick={() => setInputMode('paste')}
-            className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md transition-colors cursor-pointer ${
-              inputMode === 'paste'
-                ? 'bg-[#1E293B] text-white'
-                : 'text-slate-400 hover:text-slate-600'
-            }`}
-          >
-            <ClipboardPaste className="w-3.5 h-3.5" /> Paste Data
-          </button>
+        <div className="inline-flex items-center gap-1 p-1 rounded-full bg-slate-100 border border-slate-200">
+          <button onClick={() => setInputMode('file')} className={`inline-flex items-center gap-1.5 text-xs font-semibold px-4 py-1.5 rounded-full transition-all cursor-pointer ${inputMode === 'file' ? 'bg-slate-900 text-white shadow' : 'text-slate-600 hover:text-slate-900'}`}><Upload className="h-3.5 w-3.5" /> Upload Excel</button>
+          <button onClick={() => setInputMode('paste')} className={`inline-flex items-center gap-1.5 text-xs font-semibold px-4 py-1.5 rounded-full transition-all cursor-pointer ${inputMode === 'paste' ? 'bg-slate-900 text-white shadow' : 'text-slate-600 hover:text-slate-900'}`}><ClipboardPaste className="h-3.5 w-3.5" /> Paste Data</button>
         </div>
 
         {/* Input Area */}
         {inputMode === 'file' ? (
-          <div className="flex flex-col sm:flex-row gap-3">
-            <input
-              type="file"
-              accept=".xlsx,.xls"
-              onChange={handleFileUpload}
-              className="block w-full text-xs text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-medium file:bg-[#1E293B] file:text-white hover:file:bg-slate-700 file:cursor-pointer bg-slate-50 p-2 rounded-lg border border-[#E2E8F0] cursor-pointer"
-            />
-            <div className="flex items-center gap-2">
-              <label className="text-xs text-slate-400 whitespace-nowrap">Tanggal Redaksi:</label>
-              <input
-                type="date"
-                value={bailoutDate}
-                onChange={(e) => setBailoutDate(e.target.value)}
-                className="text-xs text-slate-700 bg-slate-50 p-2 rounded-lg border border-[#E2E8F0] focus:outline-none focus:border-blue-500"
-              />
+          <div className="space-y-3">
+            <label className="group relative flex flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50/50 hover:bg-white hover:border-indigo-300 hover:shadow-sm p-6 text-center cursor-pointer transition-all duration-150">
+              <span className="h-10 w-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-indigo-600 shadow-sm group-hover:border-indigo-200"><Upload className="h-5 w-5" /></span>
+              <div>
+                <p className="text-sm font-semibold tracking-tight text-slate-900">Seret file atau klik untuk upload</p>
+                <p className="text-xs text-slate-500 mt-1">Mendukung .xlsx, .xls</p>
+              </div>
+              <input type="file" accept=".xlsx,.xls" onChange={handleFileUpload} className="absolute inset-0 opacity-0 cursor-pointer" />
+            </label>
+            <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-2xl px-3.5 py-2.5 shadow-sm w-fit">
+              <label className="text-[11px] font-bold tracking-widest text-slate-500 uppercase whitespace-nowrap">Tanggal Redaksi:</label>
+              <input type="date" value={bailoutDate} onChange={(e) => setBailoutDate(e.target.value)} className="text-xs font-medium tracking-tight text-slate-900 bg-transparent focus:outline-none cursor-pointer" />
             </div>
           </div>
         ) : (
           <div className="space-y-3">
-            <textarea
-              value={pasteText}
-              onChange={(e) => setPasteText(e.target.value)}
-              rows={8}
-              placeholder={`Paste data tab-separated di sini...\n\nContoh:\nKODE\tNAMA\tBAILOUT\nSBPAYS-CV-MPI-00\tCV. MITRA PERDANA INDONESIA (MPI)\t-1.507.495.541`}
-              className="w-full text-xs font-mono text-slate-600 bg-slate-50 p-3 rounded-lg border border-[#E2E8F0] focus:outline-none focus:border-blue-500 resize-y placeholder:text-slate-300"
-            />
-            <div className="flex items-center gap-3">
-              <button
-                onClick={handlePasteSubmit}
-                disabled={!pasteText.trim()}
-                className="inline-flex items-center gap-1.5 text-xs px-4 py-2 bg-[#1E293B] hover:bg-slate-700 disabled:bg-slate-200 disabled:text-slate-400 text-white font-medium rounded-lg transition-colors cursor-pointer"
-              >
-                <ClipboardPaste className="w-3.5 h-3.5" /> Proses Data
-              </button>
-              <div className="flex items-center gap-2">
-                <label className="text-xs text-slate-400 whitespace-nowrap">Tanggal Redaksi:</label>
-                <input
-                  type="date"
-                  value={bailoutDate}
-                  onChange={(e) => setBailoutDate(e.target.value)}
-                  className="text-xs text-slate-700 bg-slate-50 p-2 rounded-lg border border-[#E2E8F0] focus:outline-none focus:border-blue-500"
-                />
+            <textarea value={pasteText} onChange={(e) => setPasteText(e.target.value)} rows={8} placeholder={`Paste data tab-separated di sini...\n\nContoh:\nKODE\tNAMA\tBAILOUT\nSBPAYS-CV-MPI-00\tCV. MITRA PERDANA INDONESIA (MPI)\t-1.507.495.541`} className="w-full rounded-2xl bg-white border border-slate-200 p-4 text-xs font-mono text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 resize-y shadow-sm" />
+            <div className="flex flex-wrap items-center gap-3">
+              <button onClick={handlePasteSubmit} disabled={!pasteText.trim()} className="inline-flex items-center gap-1.5 text-xs font-semibold px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-200 disabled:text-slate-400 text-white rounded-xl shadow-sm transition-colors cursor-pointer"><ClipboardPaste className="h-3.5 w-3.5" /> Proses Data</button>
+              <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-2xl px-3.5 py-2.5 shadow-sm">
+                <label className="text-[11px] font-bold tracking-widest text-slate-500 uppercase whitespace-nowrap">Tanggal Redaksi:</label>
+                <input type="date" value={bailoutDate} onChange={(e) => setBailoutDate(e.target.value)} className="text-xs font-medium tracking-tight text-slate-900 bg-transparent focus:outline-none cursor-pointer" />
               </div>
             </div>
           </div>
         )}
+        </div>
       </div>
 
       {/* Metrics */}
       {data.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="bg-white p-4 rounded-xl border border-[#E2E8F0] border-l-4 border-l-blue-500 shadow-sm">
-            <p className="text-[11px] uppercase tracking-wider text-slate-400 font-semibold">Total Agen</p>
-            <h3 className="text-2xl font-bold text-slate-800 mt-1">{data.length}</h3>
-          </div>
-          <div className="bg-white p-4 rounded-xl border border-[#E2E8F0] border-l-4 border-l-amber-500 shadow-sm">
-            <p className="text-[11px] uppercase tracking-wider text-amber-500 font-semibold">Total Minus</p>
-            <h3 className="text-2xl font-bold text-amber-600 mt-1">{formatIDCurrency(totalMinus)}</h3>
-          </div>
+          <div className="rounded-2xl bg-white border border-slate-200 p-5 shadow-sm"><p className="text-[11px] font-bold tracking-widest text-slate-500 uppercase">Total Agen</p><h3 className="text-2xl font-bold tracking-tight text-slate-900 mt-1">{data.length}</h3></div>
+          <div className="rounded-2xl bg-white border border-amber-200 p-5 shadow-sm bg-gradient-to-br from-amber-50 to-white"><p className="text-[11px] font-bold tracking-widest text-amber-600 uppercase">Total Minus</p><h3 className="text-2xl font-bold tracking-tight text-amber-700 mt-1">{formatIDCurrency(totalMinus)}</h3></div>
         </div>
       )}
 
       {/* Content */}
       {isProcessing ? (
-        <div className="bg-white rounded-xl border border-[#E2E8F0] p-12 text-center text-sm text-slate-400 shadow-sm">
-          Membaca file Excel...
-        </div>
+        <div className="rounded-2xl bg-white border border-slate-200 p-12 text-center"><span className="inline-flex items-center gap-2 text-sm text-slate-500"><span className="h-4 w-4 rounded-full border-2 border-slate-300 border-t-indigo-600 animate-spin" /> Membaca file Excel…</span></div>
       ) : data.length > 0 ? (
         <div className="space-y-4">
           {/* Controls */}
-          <div className="flex items-center justify-between bg-white p-3 rounded-lg border border-[#E2E8F0] shadow-sm">
-            <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-              Draft Pesan per Agen
-            </h3>
+          <div className="flex items-center justify-between rounded-2xl bg-white border border-slate-200 p-3 shadow-sm">
+            <h3 className="text-xs font-bold tracking-widest text-slate-600 uppercase">Draft Pesan per Agen</h3>
             <div className="flex items-center gap-1.5">
-              <button
-                onClick={collapseAll}
-                className="inline-flex items-center gap-1 text-xs px-2.5 py-1.5 bg-white hover:bg-slate-50 text-slate-500 rounded-md border border-[#E2E8F0] transition-colors cursor-pointer"
-              >
-                <FolderClosed className="w-3.5 h-3.5" /> Sembunyikan
-              </button>
-              <button
-                onClick={expandAll}
-                className="inline-flex items-center gap-1 text-xs px-2.5 py-1.5 bg-white hover:bg-slate-50 text-slate-500 rounded-md border border-[#E2E8F0] transition-colors cursor-pointer"
-              >
-                <FolderOpen className="w-3.5 h-3.5" /> Tampilkan
-              </button>
+              <button onClick={collapseAll} className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-full transition-colors cursor-pointer"><FolderClosed className="h-3.5 w-3.5" /> Sembunyikan</button>
+              <button onClick={expandAll} className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-full transition-colors cursor-pointer"><FolderOpen className="h-3.5 w-3.5" /> Tampilkan</button>
             </div>
           </div>
 
@@ -319,9 +287,9 @@ export default function BailoutPage() {
             const collapsed = !!collapsedItems[idx];
 
             return (
-              <div key={idx} className="bg-white rounded-xl border border-[#E2E8F0] overflow-hidden shadow-sm">
+              <div key={idx} className="rounded-2xl bg-white border border-slate-200 overflow-hidden shadow-sm">
                 {/* Card Header */}
-                <div className="flex items-center justify-between p-4 border-b border-[#E2E8F0]">
+                <div className="flex items-center justify-between p-4 border-b border-slate-100 bg-slate-50/50">
                   <button
                     onClick={() => toggleCollapse(idx)}
                     className="flex items-center gap-2 text-left cursor-pointer group"
@@ -340,10 +308,10 @@ export default function BailoutPage() {
                   <div className="flex items-center gap-1.5">
                     <button
                       onClick={() => handleCopy(msg, idx)}
-                      className={`inline-flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-md border transition-colors cursor-pointer ${
+                      className={`inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1.5 rounded-xl border transition-colors cursor-pointer ${
                         copied
                           ? 'bg-emerald-50 text-emerald-600 border-emerald-200'
-                          : 'bg-white hover:bg-slate-50 text-slate-600 border-[#E2E8F0]'
+                          : 'bg-white hover:bg-slate-50 text-slate-600 border-slate-200'
                       }`}
                     >
                       {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
@@ -353,7 +321,7 @@ export default function BailoutPage() {
                       href={waUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 text-xs px-3 py-1.5 bg-[#25D366] hover:bg-[#20bd5a] text-white font-medium rounded-md transition-colors"
+                      className="inline-flex items-center gap-1 text-xs px-3 py-1.5 bg-[#25D366] hover:bg-[#20bd5a] text-white font-semibold rounded-xl shadow-sm transition-colors"
                     >
                       <Send className="w-3.5 h-3.5" /> Kirim WA
                     </a>
@@ -363,9 +331,7 @@ export default function BailoutPage() {
                 {/* Message Preview */}
                 {!collapsed && (
                   <div className="p-4">
-                    <pre className="bg-slate-50 p-3 rounded-lg border border-[#E2E8F0] text-xs font-mono text-emerald-600 whitespace-pre-wrap max-h-48 overflow-y-auto">
-                      {msg}
-                    </pre>
+                    <pre className="bg-white p-4 rounded-xl border border-slate-200 text-xs font-mono text-slate-700 whitespace-pre-wrap max-h-48 overflow-y-auto shadow-sm">{msg}</pre>
                   </div>
                 )}
               </div>
@@ -379,6 +345,6 @@ export default function BailoutPage() {
           icon={<Upload className="w-8 h-8 text-slate-300" />}
         />
       )}
-    </main>
+    </div>
   );
 }
