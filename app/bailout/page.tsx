@@ -154,9 +154,18 @@ export default function BailoutPage() {
     setTimeout(() => setCopiedIdx(null), 2000);
   };
 
-  const pickerDateObj = new Date(bailoutDate + 'T00:00:00');
-  const isWeekend = !isNaN(pickerDateObj.getTime()) && (pickerDateObj.getDay() === 0 || pickerDateObj.getDay() === 6);
-  const dateStr = !isNaN(pickerDateObj.getTime()) ? formatIDDate(pickerDateObj) : formatIDDate(new Date());
+  // Aturan: input TANGGAL REDAKSI hanya untuk tentukan template Weekday/Weekend (getDay dari input),
+  // sedangkan tanggal cetak di teks redaksi WAJIB H-1 dari input (minusDate).
+  const selectedDate = new Date(bailoutDate + 'T00:00:00');
+  const isValidSelected = !isNaN(selectedDate.getTime());
+  const isWeekend = isValidSelected && (selectedDate.getDay() === 0 || selectedDate.getDay() === 6);
+  const minusDate = isValidSelected ? new Date(selectedDate) : new Date();
+  if (isValidSelected) {
+    minusDate.setDate(selectedDate.getDate() - 1);
+  } else {
+    minusDate.setDate(minusDate.getDate() - 1);
+  }
+  const dateStr = formatIDDate(minusDate);
 
   const totalMinus = data.reduce((sum, row) => sum + parseBailoutValue(row['BAILOUT']), 0);
 
