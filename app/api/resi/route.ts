@@ -3,6 +3,13 @@ import { getSession } from '@/lib/auth';
 import { supabaseServer } from '@/lib/supabaseServer';
 import { isClosedStatus } from '@/lib/constants';
 
+function normalizeNoResi(value: string): string {
+  return value.trim().replace(/\s+/g, '').toUpperCase();
+}
+function normalizeAgen(value: string): string {
+  return value.trim().replace(/\s+/g, ' ');
+}
+
 const CLOSED_AUTO_DELETE_DAYS = 2;
 
 async function deleteExpiredClosed() {
@@ -54,11 +61,11 @@ export async function POST(req: Request) {
 
     const rows = items.map((item) => ({
       tgl_tiket: String(item['tgl_tiket'] ?? ''),
-      no_resi: String(item['no_resi'] ?? '').trim(),
-      agen: String(item['agen'] ?? '').trim(),
-      layanan: String(item['layanan'] ?? 'PE'),
+      no_resi: normalizeNoResi(String(item['no_resi'] ?? '')),
+      agen: normalizeAgen(String(item['agen'] ?? '')),
+      layanan: String(item['layanan'] ?? 'PE').trim().toUpperCase(),
       petugas: String(item['petugas'] ?? '').trim(),
-      status_resi: String(item['status_resi'] ?? 'PERJALANAN'),
+      status_resi: String(item['status_resi'] ?? 'PERJALANAN').trim().toUpperCase(),
       status_fu: String(item['status_fu'] ?? (isClosedStatus(String(item['status_resi'] ?? '')) ? 'CLOSED' : 'PERLU FOLLOW UP')),
       catatan: item['catatan'] ? String(item['catatan']) : null,
       closed_at: isClosedStatus(String(item['status_resi'] ?? '')) ? new Date().toISOString() : null,
@@ -71,7 +78,12 @@ export async function POST(req: Request) {
       }
     }
 
-    const { error } = await supabaseServer.from('resi').insert(rows);
+    // Deduplikasi dalam batch: kode yang sama -> last wins, mencegah duplikat akibat spasi/casing
+    const deduped = new Map<string, (typeof rows)[number]>();
+    for (const r of rows) deduped.set(r.no_resi, r);
+    const dedupedRows = Array.from(deduped.values());
+
+    const { error } = await supabaseServer.from('resi').upsert(dedupedRows, { onConflict: 'no_resi' });
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json({ success: true });
   }
@@ -84,17 +96,17 @@ export async function POST(req: Request) {
 
   const row = {
     tgl_tiket: String(item['tgl_tiket'] ?? ''),
-    no_resi: String(item['no_resi']).trim(),
-    agen: String(item['agen']).trim(),
-    layanan: String(item['layanan'] ?? 'PE'),
+    no_resi: normalizeNoResi(String(item['no_resi'])),
+    agen: normalizeAgen(String(item['agen'])),
+    layanan: String(item['layanan'] ?? 'PE').trim().toUpperCase(),
     petugas: String(item['petugas']).trim(),
-    status_resi: String(item['status_resi'] ?? 'PERJALANAN'),
+    status_resi: String(item['status_resi'] ?? 'PERJALANAN').trim().toUpperCase(),
     status_fu: String(item['status_fu'] ?? (isClosedStatus(String(item['status_resi'])) ? 'CLOSED' : 'PERLU FOLLOW UP')),
     catatan: item['catatan'] ? String(item['catatan']) : null,
     closed_at: isClosedStatus(String(item['status_resi'])) ? new Date().toISOString() : null,
   };
 
-  const { error } = await supabaseServer.from('resi').insert([row]);
+  const { error } = await supabaseServer.from('resi').upsert([row], { onConflict: 'no_resi' });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ success: true });
 }

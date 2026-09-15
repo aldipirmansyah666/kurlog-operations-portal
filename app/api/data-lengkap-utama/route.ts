@@ -38,35 +38,90 @@ export async function POST(req: Request) {
 
   const payload = body as Record<string, unknown>;
 
-  // Batch import: { items: DataLengkapUtamaValues[] }
+  // Batch import: { items: DataLengkapUtamaValues[] } — gunakan upsert onConflict ppid
   if (Array.isArray(payload['items'])) {
     const items = payload['items'] as Record<string, unknown>[];
     if (items.length === 0) return NextResponse.json({ error: 'Items kosong' }, { status: 400 });
 
-    // server computes nextNo atomically: fetch max(no)
+    // Sanitasi + deduplikasi dalam file (kode_loket sama -> last wins)
+    const sanitizedAll = items.map((it) => sanitizeDataLengkapUtamaValues(it));
+    const dedup = new Map<string, ReturnType<typeof sanitizeDataLengkapUtamaValues>>();
+    const noPpidItems: ReturnType<typeof sanitizeDataLengkapUtamaValues>[] = [];
+    for (const san of sanitizedAll) {
+      const ppid = (san.ppid as string | null) ?? '';
+      if (!ppid) {
+        noPpidItems.push(san);
+      } else {
+        dedup.set(ppid, san);
+      }
+    }
+    const dedupedWithPpid = Array.from(dedup.values());
+
+    // Ambil existing ppid -> no mapping untuk mempertahankan `no` saat update (case-insensitive)
+    const ppids = dedupedWithPpid.map((v) => v.ppid as string).filter(Boolean);
+    const existingMap = new Map<string, number>(); // key = ppid normalized UPPER
+    if (ppids.length > 0) {
+      // Gunakan ilike untuk pencocokan case-insensitive agar "ppid001" vs "PPID001" dianggap sama
+      const orFilter = ppids.map((p) => `ppid.ilike.${p.replace(/,/g, '\\,')}`).join(',');
+      const { data: existing } = await supabaseServer.from('data_lengkap_utama').select('ppid,no').or(orFilter);
+      for (const row of (existing as { ppid: string; no: number }[] | null) ?? []) {
+        const normKey = String(row.ppid ?? '').trim().replace(/[\t\r\n]/g, '').replace(/[\u00A0]/g, ' ').replace(/\s+/g, '').toUpperCase();
+        if (normKey && normKey !== '-' && normKey !== '0' && normKey !== 'NULL') {
+          if (!existingMap.has(normKey)) existingMap.set(normKey, row.no);
+        }
+      }
+    }
     const { data: maxRow } = await supabaseServer.from('data_lengkap_utama').select('no').order('no', { ascending: false }).limit(1).single();
     let nextNo = (maxRow as { no: number } | null)?.no ? (maxRow as { no: number }).no + 1 : 1;
 
-    const INSERT_CHUNK = 500;
-    for (let i = 0; i < items.length; i += INSERT_CHUNK) {
-      const chunk = items.slice(i, i + INSERT_CHUNK).map((item) => ({
-        ...sanitizeDataLengkapUtamaValues(item),
-        no: nextNo++,
-      }));
-      const { error } = await supabaseServer.from('data_lengkap_utama').insert(chunk);
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    const withNoPpid = dedupedWithPpid.map((san) => {
+      const ppid = String(san.ppid as string ?? '').trim().replace(/[\t\r\n]/g, '').replace(/[\u00A0]/g, ' ').replace(/\s+/g, '').toUpperCase();
+      const existingNo = existingMap.get(ppid);
+      return { ...san, no: existingNo ?? nextNo++ };
+    });
+    const withoutNoPpid = noPpidItems.map((san) => ({ ...san, no: nextNo++ }));
+    const allToUpsert = [...withNoPpid, ...withoutNoPpid];
+
+    // Chunked upsert: ppid unik -> onConflict, tanpa ppid -> insert (upsert juga aman karena ppid null tidak konflik)
+    const UPSERT_CHUNK = 500;
+    for (let i = 0; i < allToUpsert.length; i += UPSERT_CHUNK) {
+      const chunk = allToUpsert.slice(i, i + UPSERT_CHUNK);
+      const withPpidChunk = chunk.filter((c) => (c.ppid as string | null));
+      const withoutPpidChunk = chunk.filter((c) => !(c.ppid as string | null));
+      if (withPpidChunk.length > 0) {
+        const { error } = await supabaseServer.from('data_lengkap_utama').upsert(withPpidChunk as unknown as Record<string, unknown>[], { onConflict: 'ppid' });
+        if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      }
+      if (withoutPpidChunk.length > 0) {
+        const { error } = await supabaseServer.from('data_lengkap_utama').insert(withoutPpidChunk as unknown as Record<string, unknown>[]);
+        if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      }
     }
     return NextResponse.json({ success: true });
   }
 
-  // Single insert: { values: {...} } or direct
+  // Single insert: { values: {...} } or direct — upsert onConflict ppid
   const values = (payload['values'] as Record<string, unknown>) ?? payload;
-  const { data: maxRow } = await supabaseServer.from('data_lengkap_utama').select('no').order('no', { ascending: false }).limit(1).single();
-  const nextNo = (maxRow as { no: number } | null)?.no ? (maxRow as { no: number }).no + 1 : 1;
-
   const sanitized = sanitizeDataLengkapUtamaValues(values);
-  const { error } = await supabaseServer.from('data_lengkap_utama').insert({ ...sanitized, no: nextNo });
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  const ppidSingle = sanitized.ppid as string | null;
+  if (ppidSingle) {
+    // Cek existing case-insensitive untuk mempertahankan `no`
+    const { data: existing } = await supabaseServer.from('data_lengkap_utama').select('no').ilike('ppid', ppidSingle).maybeSingle();
+    if (existing) {
+      const { error } = await supabaseServer.from('data_lengkap_utama').upsert({ ...sanitized, no: (existing as { no: number }).no } as unknown as Record<string, unknown>, { onConflict: 'ppid' });
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      return NextResponse.json({ success: true });
+    }
+    const { data: maxRow2 } = await supabaseServer.from('data_lengkap_utama').select('no').order('no', { ascending: false }).limit(1).single();
+    const nextNo2 = (maxRow2 as { no: number } | null)?.no ? (maxRow2 as { no: number }).no + 1 : 1;
+    const { error } = await supabaseServer.from('data_lengkap_utama').upsert({ ...sanitized, no: nextNo2 } as unknown as Record<string, unknown>, { onConflict: 'ppid' });
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ success: true });
+  }
+  const { data: maxRow3 } = await supabaseServer.from('data_lengkap_utama').select('no').order('no', { ascending: false }).limit(1).single();
+  const nextNo3 = (maxRow3 as { no: number } | null)?.no ? (maxRow3 as { no: number }).no + 1 : 1;
+  const { error: errEmpty } = await supabaseServer.from('data_lengkap_utama').insert({ ...sanitized, no: nextNo3 } as unknown as Record<string, unknown>);
+  if (errEmpty) return NextResponse.json({ error: errEmpty.message }, { status: 500 });
   return NextResponse.json({ success: true });
 }
 

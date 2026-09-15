@@ -3,6 +3,7 @@ export interface ResiItem {
   created_at?: string;
   closed_at?: string;
   tgl_tiket?: string;
+  /** UNIQUE constraint di DB: resi.no_resi (index resi_no_resi_key). Upsert onConflict: 'no_resi' */
   no_resi: string;
   agen: string;
   layanan?: string;
@@ -34,10 +35,24 @@ export interface BaggingRow {
 }
 
 export interface BailoutRow {
+  /** UNIQUE di sheet CA: KODE / MITRA ID / PAYMENT POINT — sanitasi trim+upper, upsert onConflict kode_loket+periode */
   'KODE'?: string;
   'NAMA'?: string;
   'BAILOUT'?: number | string;
   [key: string]: unknown;
+}
+
+/** Baris bailout yang sudah dipersist ke Supabase (tabel public.bailout). Constraint: UNIQUE(kode_loket, periode) */
+export interface BailoutRecord {
+  id?: string;
+  kode_loket: string;
+  periode: string; // YYYY-MM-DD
+  tanggal_text?: string;
+  nama_loket?: string;
+  nominal: number;
+  raw_payload?: Record<string, unknown>;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface ReconcileRow {
@@ -162,6 +177,7 @@ export interface DataLengkapUtamaItem {
   pos_ppob: string;
   pos_only: string;
   sicepat: string;
+  /** UNIQUE partial index: data_lengkap_utama_ppid_unique WHERE ppid <> '' — kode_loket */
   ppid: string;
   nama_loket_onpays: string;
   nama_loket_kurlog: string;

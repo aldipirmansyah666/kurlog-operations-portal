@@ -4,6 +4,24 @@ export const KODE_ALIASES = ['KODE', 'MITRA ID', 'PAYMENT POINT', 'KODE AGEN'] a
 export const NAMA_ALIASES = ['NAMA', 'NAMA MITRA', 'NAMA PAYMENT POINT', 'NAMA AGEN'] as const;
 export const BAILOUT_ALIASES = ['BAILOUT', 'MINUS', 'MINUS H-1', 'NOMINAL'] as const;
 
+/** Helper: bersihkan karakter invisible */
+function cleanInvisible(value: string): string {
+  return value.replace(/[\u00A0]/g, ' ').replace(/[\t\r\n]/g, '');
+}
+
+/** Normalisasi ketat ppid / Kode Loket sesuai spec: trim + hapus \t\r\n + hapus spasi liar + UPPER, "-" / "0" / "NULL" => "" */
+export function normalizeKodeLoket(value: unknown): string {
+  let s = String(value ?? '').replace(/[\u00A0]/g, ' ');
+  s = s.trim().replace(/[\t\r\n]/g, '').replace(/\s+/g, '').toUpperCase();
+  if (s === '-' || s === '0' || s === 'NULL' || s === '') return '';
+  return s;
+}
+
+/** Normalisasi nama untuk preview (trim + collapse spasi) */
+export function normalizeNama(value: unknown): string {
+  return String(value ?? '').trim().replace(/\s+/g, ' ');
+}
+
 function normalizeCell(value: unknown): string {
   return String(value ?? '')
     .trim()
@@ -99,14 +117,15 @@ export function parseBailoutRowsFromAOA(rows: unknown[][]): BailoutRow[] {
   const { kodeIdx, namaIdx, bailoutIdx } = findColumnIndices(headerRow);
   if (kodeIdx === -1 && namaIdx === -1 && bailoutIdx === -1) return [];
 
-  const result: BailoutRow[] = [];
+  const dedup = new Map<string, BailoutRow>();
   for (let i = headerIdx + 1; i < rows.length; i++) {
     const row = rows[i];
     if (!row || row.length === 0) continue;
     if (row.every((c) => String(c ?? '').trim() === '')) continue;
 
-    const kode = kodeIdx !== -1 ? String(row[kodeIdx] ?? '').trim() : '';
-    const nama = namaIdx !== -1 ? String(row[namaIdx] ?? '').trim() : '';
+    const rawKode = kodeIdx !== -1 ? String(row[kodeIdx] ?? '').trim() : '';
+    const kode = normalizeKodeLoket(rawKode);
+    const nama = namaIdx !== -1 ? normalizeNama(row[namaIdx] ?? '') : '';
     const rawBailout: unknown = bailoutIdx !== -1 ? (row[bailoutIdx] ?? '') : '';
 
     // Filter baris TOTAL atau kosong tanpa identitas
@@ -122,27 +141,41 @@ export function parseBailoutRowsFromAOA(rows: unknown[][]): BailoutRow[] {
     // Jika baris hanya berisi tanggal judul atau summary tanpa nominal dan kode, skip
     if (!kode && !nama) continue;
 
-    result.push({
-      KODE: kode,
-      NAMA: nama,
-      BAILOUT: bailoutNum,
-    });
+    // Deduplikasi dalam file: kode yang sama (setelah normalisasi) -> last wins (UPDATE, bukan INSERT duplikat)
+    const key = kode || `__row_${i}`;
+    const existing = dedup.get(key);
+    if (existing) {
+      // Update bestaande dengan nilai terbaru (simulasi upsert)
+      dedup.set(key, {
+        KODE: kode,
+        NAMA: nama || String(existing['NAMA'] ?? ''),
+        BAILOUT: bailoutNum,
+      });
+    } else {
+      dedup.set(key, {
+        KODE: kode,
+        NAMA: nama,
+        BAILOUT: bailoutNum,
+      });
+    }
   }
-  return result;
+  return Array.from(dedup.values());
 }
 
 /**
  * Helper untuk paste input (tab-separated). Mendukung header dinamis di baris manapun.
+ * Membersihkan karakter tersembunyi \t, \r, \n, \u00A0 sebelum sanitasi ketat ppid.
  */
 export function parseBailoutFromPaste(text: string): BailoutRow[] {
-  const lines = text.trim().split('\n').filter((l) => l.trim());
+  const cleanedText = text.replace(/[\u00A0]/g, ' ');
+  const lines = cleanedText.trim().split('\n').map((l) => cleanInvisible(l).trim()).filter((l) => l.trim());
   if (lines.length === 0) return [];
   // Ubah setiap line menjadi array kolom (split tab, fallback ke comma jika tidak ada tab)
   const rows: string[][] = lines.map((line) => {
-    if (line.includes('\t')) return line.split('\t').map((c) => c.trim());
-    if (line.includes(',')) return line.split(',').map((c) => c.trim());
+    if (line.includes('\t')) return line.split('\t').map((c) => cleanInvisible(c).trim());
+    if (line.includes(',')) return line.split(',').map((c) => cleanInvisible(c).trim());
     // fallback: split by 2+ spaces
-    return line.split(/\s{2,}/).map((c) => c.trim());
+    return line.split(/\s{2,}/).map((c) => cleanInvisible(c).trim());
   });
 
   const headerIdx = findHeaderRowIndex(rows as unknown[][]);
@@ -151,21 +184,23 @@ export function parseBailoutFromPaste(text: string): BailoutRow[] {
   const { kodeIdx, namaIdx, bailoutIdx } = findColumnIndices(headerRow);
   if (kodeIdx === -1 && namaIdx === -1 && bailoutIdx === -1) return [];
 
-  const result: BailoutRow[] = [];
+  const dedupPaste = new Map<string, BailoutRow>();
   for (let i = headerIdx + 1; i < rows.length; i++) {
     const cols = rows[i];
     if (!cols || cols.length === 0) continue;
     if (cols.every((c) => String(c ?? '').trim() === '')) continue;
-    const kode = kodeIdx !== -1 ? (cols[kodeIdx] ?? '').trim() : '';
-    const nama = namaIdx !== -1 ? (cols[namaIdx] ?? '').trim() : '';
+    const rawKode = kodeIdx !== -1 ? (cols[kodeIdx] ?? '').trim() : '';
+    const kode = normalizeKodeLoket(rawKode);
+    const nama = namaIdx !== -1 ? normalizeNama(cols[namaIdx] ?? '') : '';
     const raw = bailoutIdx !== -1 ? (cols[bailoutIdx] ?? '').trim() : '';
     if (!nama && !kode) continue;
     if (nama.toUpperCase() === 'TOTAL' || kode.toUpperCase() === 'TOTAL') continue;
     if (!nama) continue;
     if (nama.toUpperCase().includes('JUMLAH')) continue;
     const bailoutNum = cleanBailoutValue(raw);
-    result.push({ KODE: kode, NAMA: nama, BAILOUT: bailoutNum });
+    const key = kode || `__row_${i}`;
+    dedupPaste.set(key, { KODE: kode, NAMA: nama, BAILOUT: bailoutNum });
   }
   // Filter agar hanya baris dengan NAMA valid
-  return result.filter((row) => row.NAMA && String(row.NAMA).trim() !== '' && String(row.NAMA).toUpperCase() !== 'TOTAL');
+  return Array.from(dedupPaste.values()).filter((row) => row.NAMA && String(row.NAMA).trim() !== '' && String(row.NAMA).toUpperCase() !== 'TOTAL');
 }

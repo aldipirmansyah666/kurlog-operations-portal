@@ -101,12 +101,135 @@ export type DataLengkapUtamaInsert = Partial<Record<keyof DataLengkapUtamaValues
  * Semua kolom bersifat opsional: nilai kosong diubah menjadi `null`,
  * dan key yang tidak dikenal dibuang. Tidak ada validation error untuk sel kosong.
  */
+/** Helper: bersihkan karakter invisible (Tab, Newline, NBSP) sebelum sanitasi */
+function cleanInvisibleChars(value: string): string {
+  return value.replace(/[\u00A0]/g, ' ').replace(/[\t\r\n]/g, '');
+}
+
+/** Normalisasi ketat ppid / Kode Loket sesuai spec: trim + hapus \t\r\n + hapus spasi liar + UPPER, "-" / "0" / "NULL" => "" */
+function normalizeKodeLoketValue(value: string): string {
+  let s = String(value ?? '').replace(/[\u00A0]/g, ' ');
+  s = s.trim().replace(/[\t\r\n]/g, '').replace(/\s+/g, '').toUpperCase();
+  if (s === '-' || s === '0' || s === 'NULL' || s === '') return '';
+  return s;
+}
+
+/** Daftar kolom yang berpotensi berisi tanggal — perlu konversi ke ISO agar PG tidak reject */
+const DATE_FIELD_KEYS = new Set<string>([
+  'syarat',
+  'pengajuan_survey_ke_pos',
+  'pengajuan_pos',
+  'pendaftaran_kurlog',
+  'kelengkapan_perangkat',
+  'aktivasi_kurlog',
+  'aktivasi_sicepat',
+  'training',
+  'transaksi',
+  'waktu',
+]);
+
+const INDONESIAN_MONTHS: Record<string, string> = {
+  JANUARI: '01',
+  FEBRUARI: '02',
+  MARET: '03',
+  APRIL: '04',
+  MEI: '05',
+  JUNI: '06',
+  JULI: '07',
+  AGUSTUS: '08',
+  SEPTEMBER: '09',
+  OKTOBER: '10',
+  NOVEMBER: '11',
+  DESEMBER: '12',
+};
+
+/**
+ * Konversi format tanggal Indonesia ke ISO YYYY-MM-DD.
+ * Support: "19 DESEMBER 2022", "19 Desember 2022", "19-12-2022", "19/12/2022", "2022-12-19".
+ * Return null jika kosong/invalid agar PostgreSQL tidak reject.
+ */
+function parseIndonesianDateToISO(value: string): string | null {
+  const raw = cleanInvisibleChars(value).trim();
+  if (!raw || raw === '-' || raw.toUpperCase() === 'NULL' || raw === '0') return null;
+
+  // Sudah ISO YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    const d = new Date(raw);
+    return isNaN(d.getTime()) ? null : raw;
+  }
+
+  // DD-MM-YYYY atau DD/MM/YYYY atau DD.MM.YYYY
+  const dmY = raw.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/);
+  if (dmY) {
+    const dd = dmY[1].padStart(2, '0');
+    const mm = dmY[2].padStart(2, '0');
+    const yyyy = dmY[3];
+    const iso = `${yyyy}-${mm}-${dd}`;
+    const d = new Date(iso);
+    return isNaN(d.getTime()) ? null : iso;
+  }
+
+  // "19 DESEMBER 2022" atau "19 Desember 2022"
+  const parts = raw.replace(/\s+/g, ' ').trim().split(' ');
+  if (parts.length === 3) {
+    const dd = parts[0].replace(/\D/g, '').padStart(2, '0');
+    const monthName = parts[1].toUpperCase().replace(/[^A-Z]/g, '');
+    const yyyy = parts[2].replace(/\D/g, '');
+    const mm = INDONESIAN_MONTHS[monthName];
+    if (dd && mm && yyyy && yyyy.length === 4) {
+      const iso = `${yyyy}-${mm}-${dd}`;
+      const d = new Date(iso);
+      return isNaN(d.getTime()) ? null : iso;
+    }
+  }
+
+  // Coba Date parse fallback, tapi hanya jika menghasilkan ISO valid
+  const fallback = new Date(raw);
+  if (!isNaN(fallback.getTime())) {
+    // Pastikan format bukan "Invalid" dan raw mengandung angka tahun
+    if (/\d{4}/.test(raw)) {
+      return fallback.toISOString().slice(0, 10);
+    }
+  }
+
+  return null;
+}
+
 export function sanitizeDataLengkapUtamaValues(values: Record<string, unknown>): DataLengkapUtamaInsert {
   const result: DataLengkapUtamaInsert = {};
   for (const col of DATA_LENGKAP_UTAMA_COLUMNS) {
     if (col.key === 'no') continue;
     const raw = values[col.key];
-    const str = raw === null || raw === undefined ? '' : String(raw).trim();
+    let str = raw === null || raw === undefined ? '' : String(raw);
+    // Bersihkan karakter invisible untuk semua kolom copas
+    str = cleanInvisibleChars(str).trim();
+    // Sanitasi konsisten untuk field unik
+    if (col.key === 'ppid') {
+      str = str ? normalizeKodeLoketValue(str) : '';
+      // normalizeKodeLoketValue sudah handle "-" / "0" / "NULL" => ""
+    } else if (DATE_FIELD_KEYS.has(col.key)) {
+      // Perketat parser tanggal: konversi ke ISO atau null jika invalid
+      if (!str || str === '-' || str.toUpperCase() === 'NULL' || str === '0') {
+        str = '';
+      } else {
+        // Hanya konversi jika tampak seperti tanggal
+        const looksLikeDate =
+          /^\d{4}-\d{2}-\d{2}$/.test(str) ||
+          /^\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{4}$/.test(str) ||
+          Object.keys(INDONESIAN_MONTHS).some((m) => str.toUpperCase().includes(m));
+        if (looksLikeDate) {
+          const iso = parseIndonesianDateToISO(str);
+          str = iso ?? '';
+        } else {
+          // Bukan format tanggal (misal "X", "OK"), biarkan apa adanya tapi collapse spasi
+          str = str.replace(/\s+/g, ' ');
+        }
+      }
+    } else if (str) {
+      // Untuk field lain tetap trim + collapse spasi ganda + hilangkan NBSP
+      str = str.replace(/\s+/g, ' ');
+      if (str === '-' || str.toUpperCase() === 'NULL') str = '';
+    }
     result[col.key as keyof DataLengkapUtamaValues] = str === '' ? null : str;
   }
   return result;
@@ -189,9 +312,11 @@ export function parseDataLengkapUtamaRows(rows: unknown[][]): DataLengkapUtamaVa
 }
 
 export function parseDataLengkapUtamaPaste(text: string): DataLengkapUtamaValues[] {
-  const rows = text
+  // Bersihkan karakter invisible sebelum split
+  const cleanedText = text.replace(/[\u00A0]/g, ' ');
+  const rows = cleanedText
     .split('\n')
-    .map((line) => line.split('\t').map((c) => c.trim()))
+    .map((line) => line.replace(/\r/g, '').split('\t').map((c) => cleanInvisibleChars(c).trim()))
     .filter((cells) => cells.some((c) => c !== ''));
 
   if (rows.length === 0) throw new Error('Tidak ada baris data yang ditemukan');
@@ -203,7 +328,7 @@ export function parseDataLengkapUtamaPaste(text: string): DataLengkapUtamaValues
     const obj: Record<string, string> = {};
     for (const col of DATA_LENGKAP_UTAMA_DATA_COLUMNS) obj[col.key] = '';
     DATA_LENGKAP_UTAMA_DATA_COLUMNS.forEach((col, i) => {
-      if (i < cells.length) obj[col.key] = cells[i];
+      if (i < cells.length) obj[col.key] = cleanInvisibleChars(cells[i]).trim();
     });
     return obj as unknown as DataLengkapUtamaValues;
   });
