@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import {
   ShoppingBag,
   ChevronDown,
@@ -15,6 +15,7 @@ import {
 import type { BaggingRow } from '@/lib/types';
 import EmptyState from '@/app/components/ui/EmptyState';
 import { MAX_EXCEL_SIZE_BYTES, validateFileSize, validateExcelMagicBytes } from '@/lib/fileValidation';
+import { buildBaggingMessage } from '@/lib/baggingMessage';
 
 function formatDateDDMMYYYY(value: unknown): string {
   if (!value) return '-';
@@ -108,18 +109,34 @@ export default function BaggingPage() {
     setTimeout(() => setCopiedAgen(null), 2000);
   };
 
-  const filteredBagging = baggingData.filter(
-    (row) => String(row['Status Bagging'] || '').trim().toLowerCase() === 'belum dibagging'
+  const filteredBagging = useMemo(
+    () => baggingData.filter((row) => String(row['Status Bagging'] || '').trim().toLowerCase() === 'belum dibagging'),
+    [baggingData]
   );
 
-  const groupedByAgen = filteredBagging.reduce<Record<string, BaggingRow[]>>((acc, row) => {
-    const agen = String(row['Agen'] || 'LAINNYA').trim();
-    if (!acc[agen]) acc[agen] = [];
-    acc[agen].push(row);
-    return acc;
-  }, {});
+  const groupedByAgen = useMemo(
+    () =>
+      filteredBagging.reduce<Record<string, BaggingRow[]>>((acc, row) => {
+        const agen = String(row['Agen'] || 'LAINNYA').trim();
+        if (!acc[agen]) acc[agen] = [];
+        acc[agen].push(row);
+        return acc;
+      }, {}),
+    [filteredBagging]
+  );
 
-  const agenKeys = Object.keys(groupedByAgen);
+  const agenKeys = useMemo(() => Object.keys(groupedByAgen), [groupedByAgen]);
+
+  const agenMessages = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const agenName of agenKeys) {
+      const items = groupedByAgen[agenName] ?? [];
+      const sampleDate = formatDateDDMMYYYY(items[0]?.['Tanggal']);
+      const resiList = items.map((i) => String(i['No Resi'] || '-').trim()).filter(Boolean);
+      map[agenName] = buildBaggingMessage({ agenName, tanggal: sampleDate, resiList });
+    }
+    return map;
+  }, [agenKeys, groupedByAgen]);
 
   return (
     <div className="space-y-6">
@@ -172,9 +189,7 @@ export default function BaggingPage() {
           {/* Agen Cards */}
           {agenKeys.map((agenName) => {
             const items = groupedByAgen[agenName];
-            const sampleDate = formatDateDDMMYYYY(items[0]?.['Tanggal']);
-            const resiListStr = items.map((i) => i['No Resi']).join('\n');
-            const msg = `Selamat pagi pak, mohon maaf mengganggu waktunya pak, kami sampaikan ada paket di agen bapak ${agenName} pada Tanggal ${sampleDate} yang belum dibagging ya pak?\nMohon dibantu untuk segera dibagging.\n\nBerikut informasi resinya :\n${resiListStr}`;
+            const msg = agenMessages[agenName] ?? '';
             const waUrl = `https://web.whatsapp.com/send?text=${encodeURIComponent(msg)}`;
             const collapsed = !!collapsedAgens[agenName];
             const copied = copiedAgen === agenName;

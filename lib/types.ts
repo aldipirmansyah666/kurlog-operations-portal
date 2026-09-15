@@ -65,6 +65,20 @@ export interface ExcelValidationResult {
   errors: string[];
 }
 
+export type WaLogStatus = 'Sent' | 'Pending' | 'Failed';
+export type WaLogType = 'Bagging' | 'Bailout' | 'Reconcile' | 'Follow Up';
+
+export interface WaLog {
+  id: string;
+  sentAt: string; // ISO string
+  type: WaLogType;
+  agenName: string;
+  kodeLoket: string;
+  waNumber: string;
+  message: string;
+  status: WaLogStatus;
+}
+
 export type UserRole = 'ADMIN' | 'USER';
 
 export interface User {

@@ -16,6 +16,9 @@ import {
   Menu,
   X,
   ChevronDown,
+  ScrollText,
+  MessageSquare,
+  Megaphone,
 } from 'lucide-react';
 
 interface UserInfo {
@@ -31,6 +34,9 @@ const NAV_ITEMS = [
   { href: '/bagging', label: 'Bagging', icon: ShoppingBag },
   { href: '/bailout', label: 'Bailout', icon: AlertTriangle },
   { href: '/reconcile', label: 'Reconcile', icon: FileCheck },
+  { href: '/logs', label: 'WA Logs', icon: ScrollText },
+  { href: '/chat', label: 'CS Inbox', icon: MessageSquare },
+  { href: '/broadcast', label: 'Broadcast', icon: Megaphone },
 ];
 
 export default function Navbar() {

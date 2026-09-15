@@ -16,6 +16,7 @@ import {
 import type { BailoutRow } from '@/lib/types';
 import EmptyState from '@/app/components/ui/EmptyState';
 import { MAX_EXCEL_SIZE_BYTES, validateFileSize, validateExcelMagicBytes } from '@/lib/fileValidation';
+import { cleanBailoutValue, parseBailoutRowsFromAOA, parseBailoutFromPaste } from '@/lib/bailoutParser';
 
 const INDONESIAN_MONTHS = [
   'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
@@ -33,43 +34,23 @@ function formatIDCurrency(value: number): string {
 }
 
 function parseBailoutValue(val: unknown): number {
-  if (typeof val === 'number') return val;
-  const str = String(val || '0').replace(/[^0-9,\-]/g, '').replace(',', '.');
-  return Number(str) || 0;
+  return cleanBailoutValue(val);
 }
 
+// Legacy wrapper: tetap tersedia untuk kompatibilitas, sekarang menggunakan parser dinamis AOA.
+// Fungsi ini dipertahankan agar tidak breaking jika ada pemanggil eksternal, tapi logic utama
+// telah dipindahkan ke lib/bailoutParser.ts (support header baris ke-2, alias fleksibel, multi-sheet).
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function normalizeRows(raw: Record<string, unknown>[]): BailoutRow[] {
   if (raw.length === 0) return [];
+  // Konversi raw (sheet_to_json dengan header baris pertama) ke AOA untuk deteksi header dinamis
   const keys = Object.keys(raw[0]);
-  const kodeKey = keys.find((k) => k.trim().toUpperCase().includes('KODE'));
-  const namaKey = keys.find((k) => k.trim().toUpperCase().includes('NAMA'));
-  const bailoutKey = keys.find((k) => k.trim().toUpperCase().includes('BAIL'));
-
-  return raw.map((row) => ({
-    KODE: kodeKey ? String(row[kodeKey] ?? '') : '',
-    NAMA: namaKey ? String(row[namaKey] ?? '') : '',
-    BAILOUT: bailoutKey ? String(row[bailoutKey] ?? '') : '',
-  }));
+  const aoa: unknown[][] = [keys, ...raw.map((r) => keys.map((k) => r[k]))];
+  return parseBailoutRowsFromAOA(aoa);
 }
 
 function parsePasteInput(text: string): BailoutRow[] {
-  const lines = text.trim().split('\n').filter((l) => l.trim());
-  if (lines.length < 2) return [];
-
-  const headers = lines[0].split('\t').map((h) => h.trim().toUpperCase());
-  const kodeIdx = headers.findIndex((h) => h.includes('KODE'));
-  const namaIdx = headers.findIndex((h) => h.includes('NAMA'));
-  const bailoutIdx = headers.findIndex((h) => h.includes('BAIL'));
-
-  if (kodeIdx === -1 && namaIdx === -1 && bailoutIdx === -1) return [];
-
-  return lines.slice(1).map((line) => {
-    const cols = line.split('\t');
-    const kode = kodeIdx >= 0 ? (cols[kodeIdx] || '').trim() : '';
-    const nama = namaIdx >= 0 ? (cols[namaIdx] || '').trim() : '';
-    const bailout = bailoutIdx >= 0 ? (cols[bailoutIdx] || '').trim() : '';
-    return { KODE: kode, NAMA: nama, BAILOUT: bailout };
-  }).filter((row) => row.NAMA && row.NAMA !== 'TOTAL');
+  return parseBailoutFromPaste(text);
 }
 
 export default function BailoutPage() {
@@ -120,11 +101,18 @@ export default function BailoutPage() {
         return;
       }
       const workbook = XLSX.read(buffer, { type: 'array' });
-      const sheetName = workbook.SheetNames[0];
-      if (!sheetName) throw new Error('No sheet found');
-      const sheet = workbook.Sheets[sheetName];
-      const jsonData = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: '' });
-      setData(normalizeRows(jsonData));
+      if (workbook.SheetNames.length === 0) throw new Error('No sheet found');
+      // Hanya baca sheet "CA" (case-insensitive); fallback ke sheet pertama jika tidak ada
+      const targetSheetName =
+        workbook.SheetNames.find((name) => name.trim().toLowerCase() === 'ca') ?? workbook.SheetNames[0];
+      const sheet = workbook.Sheets[targetSheetName];
+      if (!sheet) throw new Error('No sheet found');
+      const aoa = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: '' }) as unknown[][];
+      const parsed = parseBailoutRowsFromAOA(aoa);
+      setData(parsed);
+      if (parsed.length === 0) {
+        setUploadError('Tidak ada data bailout yang terdeteksi. Periksa format header (KODE/MITRA ID/PAYMENT POINT).');
+      }
     } catch (err) {
       console.error('Error reading Excel:', err);
       setUploadError('Gagal membaca file Excel');
