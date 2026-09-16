@@ -46,7 +46,11 @@ export function useResi() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'resi' }, () => {
         fetchResi();
       })
-      .subscribe();
+      .subscribe((status) => {
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          console.warn(`[realtime:resi] subscribe status: ${status}`);
+        }
+      });
     return () => {
       supabase.removeChannel(channel);
     };
@@ -70,14 +74,18 @@ export function useResi() {
 
   const addResiBatch = useCallback(
     async (items: Omit<ResiItem, 'id' | 'created_at'>[]) => {
-      const res = await fetch('/api/resi', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items }),
-      });
-      if (!res.ok) {
-        const j = await res.json().catch(() => ({}));
-        throw new Error(j.error || 'Gagal import batch');
+      const CHUNK = 500;
+      for (let i = 0; i < items.length; i += CHUNK) {
+        const chunk = items.slice(i, i + CHUNK);
+        const res = await fetch('/api/resi', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ items: chunk }),
+        });
+        if (!res.ok) {
+          const j = await res.json().catch(() => ({}));
+          throw new Error(j.error || `Gagal import batch ${Math.floor(i / CHUNK) + 1}: ${res.statusText}`);
+        }
       }
       await fetchResi();
     },

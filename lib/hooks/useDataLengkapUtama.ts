@@ -42,7 +42,11 @@ export function useDataLengkapUtama() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'data_lengkap_utama' }, () => {
         fetchData();
       })
-      .subscribe();
+      .subscribe((status) => {
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          console.warn(`[realtime:data-lengkap-utama] status: ${status}`);
+        }
+      });
     return () => {
       supabase.removeChannel(channel);
     };
@@ -94,14 +98,19 @@ export function useDataLengkapUtama() {
 
   const importItems = useCallback(
     async (items: DataLengkapUtamaValues[]) => {
-      const res = await fetch('/api/data-lengkap-utama', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items }),
-      });
-      if (!res.ok) {
-        const j = await res.json().catch(() => ({}));
-        throw new Error(j.error || 'Gagal import');
+      // Client-side chunking untuk hindari 413 / timeout (1465+ rows) — mirror PasteImportModal logic
+      const CHUNK = 500;
+      for (let i = 0; i < items.length; i += CHUNK) {
+        const chunk = items.slice(i, i + CHUNK);
+        const res = await fetch('/api/data-lengkap-utama', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ items: chunk }),
+        });
+        if (!res.ok) {
+          const j = await res.json().catch(() => ({}));
+          throw new Error(j.error || `Gagal import batch ${Math.floor(i / CHUNK) + 1}: ${res.statusText}`);
+        }
       }
       await fetchData();
     },

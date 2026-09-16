@@ -68,8 +68,8 @@ export default function DataLengkapPage() {
       await addItem(item);
       showToast('Data berhasil ditambahkan', 'success');
       setShowForm(false);
-    } catch {
-      showToast('Gagal menambahkan data', 'error');
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'Gagal menambahkan data', 'error');
     }
   };
 
@@ -80,8 +80,8 @@ export default function DataLengkapPage() {
       showToast('Data berhasil diperbarui', 'success');
       setShowForm(false);
       setEditItem(null);
-    } catch {
-      showToast('Gagal memperbarui data', 'error');
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'Gagal memperbarui data', 'error');
     }
   };
 
@@ -90,8 +90,8 @@ export default function DataLengkapPage() {
     try {
       await deleteItem(deleteTarget);
       showToast('Data berhasil dihapus', 'success');
-    } catch {
-      showToast('Gagal menghapus data', 'error');
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'Gagal menghapus data', 'error');
     }
     setDeleteTarget(null);
   };
@@ -101,8 +101,8 @@ export default function DataLengkapPage() {
       await deleteAll();
       showToast('Semua data berhasil dihapus', 'success');
       setShowClearAll(false);
-    } catch {
-      showToast('Gagal menghapus data', 'error');
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'Gagal menghapus data', 'error');
     }
   };
 
@@ -210,12 +210,36 @@ export default function DataLengkapPage() {
             'KCU/KC': 'kcuKc',
           };
 
+          // Alias support for columns with known variants
+          const aliasMap: Record<string, string[]> = {
+            ppid: ['PPID'],
+            namaLoketOnpays: ['NAMA LOKET DI ONPAYS', 'NAMA LOKET ONPAYS'],
+            namaLoketKurlog: ['NAMA LOKET DI KURLOG', 'NAMA LOKET KURLOG'],
+            kabKota: ['KAB/KOT', 'KAB/KOTA'],
+            nib: ['NIB', 'NIB (NO INDUK BERUSAHA)', 'NIB ( NO INDUK BERUSAHA)'],
+            namaPemilikRekening: ['NAMA PEMILIK REKENING', 'NAMA PEMILIK'],
+            noHpLoket: ['NO.HP LOKET', 'NO HP LOKET', 'NO.HP LOKET'],
+            alamatPemilikKtp: ['ALAMAT PEMILIK KTP', 'ALAMAT PEMIILIK KTP'],
+          };
           for (const [excelKey, itemKey] of Object.entries(keyMap)) {
-            const found = Object.keys(row).find(
-              (k) => k.trim().toUpperCase() === excelKey
-            );
+            const candidates = aliasMap[itemKey] ?? [excelKey];
+            const found = Object.keys(row).find((k) => {
+              const nk = String(k ?? '')
+                .replace(/[\u00A0]/g, ' ')
+                .replace(/[\uFEFF\u200B\u200C\u200D\u2060]/g, '')
+                .replace(/[\t\r\n]/g, ' ')
+                .trim()
+                .toUpperCase()
+                .replace(/\s+/g, ' ');
+              return candidates.some((c) => nk === c.replace(/\s+/g, ' ').trim().toUpperCase());
+            });
             if (found) {
-              (item as unknown as Record<string, string>)[itemKey] = String(row[found] ?? '');
+              const rawVal = row[found];
+              const cleanVal =
+                typeof rawVal === 'string'
+                  ? rawVal.replace(/[\u00A0]/g, ' ').replace(/[\uFEFF\u200B\u200C\u200D\u2060\r]/g, '').replace(/[\t\n]/g, ' ').trim()
+                  : String(rawVal ?? '').trim();
+              (item as unknown as Record<string, string>)[itemKey] = cleanVal;
             }
           }
           return item;

@@ -87,8 +87,26 @@ export function buildDataLengkapUtamaGroups(columns: DataLengkapUtamaColumn[] = 
   return groups;
 }
 
+const NBSP_REGEX = /\u00A0/g;
+const ZERO_WIDTH_REGEX = /[\uFEFF\u200B\u200C\u200D\u2060\u180E]/g;
+
+function stripInvisible(value: string): string {
+  return value.replace(NBSP_REGEX, ' ').replace(ZERO_WIDTH_REGEX, '').replace(/\r/g, '');
+}
+
+function isValidCalendarDate(y: number, m: number, d: number): boolean {
+  if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d)) return false;
+  if (m < 1 || m > 12 || d < 1 || d > 31) return false;
+  const dt = new Date(y, m - 1, d);
+  return dt.getFullYear() === y && dt.getMonth() === m - 1 && dt.getDate() === d;
+}
+
 export function normalizeHeader(value: unknown): string {
-  return String(value ?? '').replace(/\s+/g, ' ').trim().toUpperCase();
+  return stripInvisible(String(value ?? ''))
+    .replace(/[\t\n]/g, ' ')
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, ' ');
 }
 
 // Set kolom data (semua kecuali `no`) — dipakai sebagai "DTO" import/paste.
@@ -101,16 +119,12 @@ export type DataLengkapUtamaInsert = Partial<Record<keyof DataLengkapUtamaValues
  * Semua kolom bersifat opsional: nilai kosong diubah menjadi `null`,
  * dan key yang tidak dikenal dibuang. Tidak ada validation error untuk sel kosong.
  */
-/** Helper: bersihkan karakter invisible (Tab, Newline, NBSP) sebelum sanitasi */
-function cleanInvisibleChars(value: string): string {
-  return value.replace(/[\u00A0]/g, ' ').replace(/[\t\r\n]/g, '');
-}
-
 /** Normalisasi ketat ppid / Kode Loket sesuai spec: trim + hapus \t\r\n + hapus spasi liar + UPPER, "-" / "0" / "NULL" => "" */
 function normalizeKodeLoketValue(value: string): string {
-  let s = String(value ?? '').replace(/[\u00A0]/g, ' ');
-  s = s.trim().replace(/[\t\r\n]/g, '').replace(/\s+/g, '').toUpperCase();
-  if (s === '-' || s === '0' || s === 'NULL' || s === '') return '';
+  let s = stripInvisible(String(value ?? ''));
+  s = s.replace(/[\t\n]/g, '');
+  s = s.trim().replace(/\s+/g, '').toUpperCase();
+  if (s === '-' || s === '0' || s === 'NULL' || s === 'N/A' || s === 'NA' || s === '') return '';
   return s;
 }
 
@@ -144,52 +158,71 @@ const INDONESIAN_MONTHS: Record<string, string> = {
 };
 
 /**
- * Konversi format tanggal Indonesia ke ISO YYYY-MM-DD.
- * Support: "19 DESEMBER 2022", "19 Desember 2022", "19-12-2022", "19/12/2022", "2022-12-19".
- * Return null jika kosong/invalid agar PostgreSQL tidak reject.
+ * Konversi format tanggal Indonesia ke ISO YYYY-MM-DD tanpa pernah return "Invalid Date".
+ * Support: "19 DESEMBER 2022", "2022-12-19", "19/12/2022", "YYYYMMDD", "YYYY/MM/DD", "DD.MM.YYYY", Excel serial.
+ * Return null jika kosong/invalid agar PostgreSQL tidak reject — validasi kalender ketat via isValidCalendarDate.
  */
 function parseIndonesianDateToISO(value: string): string | null {
-  const raw = cleanInvisibleChars(value).trim();
-  if (!raw || raw === '-' || raw.toUpperCase() === 'NULL' || raw === '0') return null;
+  const raw = stripInvisible(String(value ?? ''))
+    .replace(/[\t\n]/g, ' ')
+    .trim()
+    .replace(/\s+/g, ' ');
+  if (!raw || raw === '-' || raw.toUpperCase() === 'NULL' || raw.toUpperCase() === 'N/A' || raw === '0') return null;
 
-  // Sudah ISO YYYY-MM-DD
-  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
-    const d = new Date(raw);
-    return isNaN(d.getTime()) ? null : raw;
+  // YYYYMMDD (8 digit) — excel copas sering tanpa separator
+  if (/^\d{8}$/.test(raw)) {
+    const y = Number(raw.slice(0, 4));
+    const m = Number(raw.slice(4, 6));
+    const d = Number(raw.slice(6, 8));
+    if (isValidCalendarDate(y, m, d)) return `${String(y).padStart(4, '0')}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    return null;
+  }
+
+  // Sudah ISO YYYY-MM-DD / YYYY/MM/DD / YYYY.MM.DD
+  const ymd = raw.match(/^(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})$/);
+  if (ymd) {
+    const y = Number(ymd[1]);
+    const m = Number(ymd[2]);
+    const d = Number(ymd[3]);
+    if (isValidCalendarDate(y, m, d)) return `${String(y).padStart(4, '0')}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    return null;
   }
 
   // DD-MM-YYYY atau DD/MM/YYYY atau DD.MM.YYYY
   const dmY = raw.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/);
   if (dmY) {
-    const dd = dmY[1].padStart(2, '0');
-    const mm = dmY[2].padStart(2, '0');
-    const yyyy = dmY[3];
-    const iso = `${yyyy}-${mm}-${dd}`;
-    const d = new Date(iso);
-    return isNaN(d.getTime()) ? null : iso;
+    const d = Number(dmY[1]);
+    const m = Number(dmY[2]);
+    const y = Number(dmY[3]);
+    if (isValidCalendarDate(y, m, d)) return `${String(y).padStart(4, '0')}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    return null;
   }
 
   // "19 DESEMBER 2022" atau "19 Desember 2022"
   const parts = raw.replace(/\s+/g, ' ').trim().split(' ');
   if (parts.length === 3) {
-    const dd = parts[0].replace(/\D/g, '').padStart(2, '0');
+    const ddNum = Number(parts[0].replace(/\D/g, ''));
     const monthName = parts[1].toUpperCase().replace(/[^A-Z]/g, '');
-    const yyyy = parts[2].replace(/\D/g, '');
-    const mm = INDONESIAN_MONTHS[monthName];
-    if (dd && mm && yyyy && yyyy.length === 4) {
-      const iso = `${yyyy}-${mm}-${dd}`;
-      const d = new Date(iso);
-      return isNaN(d.getTime()) ? null : iso;
+    const yyyyNum = Number(parts[2].replace(/\D/g, ''));
+    const mmStr = INDONESIAN_MONTHS[monthName];
+    if (mmStr) {
+      const mmNum = Number(mmStr);
+      if (isValidCalendarDate(yyyyNum, mmNum, ddNum)) {
+        return `${String(yyyyNum).padStart(4, '0')}-${String(mmNum).padStart(2, '0')}-${String(ddNum).padStart(2, '0')}`;
+      }
     }
+    return null;
   }
 
-  // Coba Date parse fallback, tapi hanya jika menghasilkan ISO valid
+  // Coba Date parse fallback — tapi validasi via isValidCalendarDate agar tidak menerima 2026-02-30
   const fallback = new Date(raw);
-  if (!isNaN(fallback.getTime())) {
-    // Pastikan format bukan "Invalid" dan raw mengandung angka tahun
-    if (/\d{4}/.test(raw)) {
-      return fallback.toISOString().slice(0, 10);
-    }
+  if (!isNaN(fallback.getTime()) && /\d{4}/.test(raw)) {
+    // Ambil UTC date lalu validasi
+    const y = fallback.getUTCFullYear();
+    const m = fallback.getUTCMonth() + 1;
+    const d = fallback.getUTCDate();
+    // Hanya return jika raw tidak mengandung DMY ambiguous yang sudah gagal di atas
+    if (isValidCalendarDate(y, m, d)) return fallback.toISOString().slice(0, 10);
   }
 
   return null;
@@ -201,34 +234,30 @@ export function sanitizeDataLengkapUtamaValues(values: Record<string, unknown>):
     if (col.key === 'no') continue;
     const raw = values[col.key];
     let str = raw === null || raw === undefined ? '' : String(raw);
-    // Bersihkan karakter invisible untuk semua kolom copas
-    str = cleanInvisibleChars(str).trim();
+    // Bersihkan karakter invisible untuk semua kolom copas (NBSP, zero-width, \r\t\n)
+    str = stripInvisible(str).replace(/[\t\n]/g, ' ').trim();
     // Sanitasi konsisten untuk field unik
     if (col.key === 'ppid') {
       str = str ? normalizeKodeLoketValue(str) : '';
-      // normalizeKodeLoketValue sudah handle "-" / "0" / "NULL" => ""
     } else if (DATE_FIELD_KEYS.has(col.key)) {
-      // Perketat parser tanggal: konversi ke ISO atau null jika invalid
-      if (!str || str === '-' || str.toUpperCase() === 'NULL' || str === '0') {
+      if (!str || str === '-' || str.toUpperCase() === 'NULL' || str.toUpperCase() === 'N/A' || str === '0') {
         str = '';
       } else {
-        // Hanya konversi jika tampak seperti tanggal
         const looksLikeDate =
-          /^\d{4}-\d{2}-\d{2}$/.test(str) ||
+          /^\d{8}$/.test(str) ||
+          /^\d{4}[\/\-.]\d{1,2}[\/\-.]\d{1,2}$/.test(str) ||
           /^\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{4}$/.test(str) ||
           Object.keys(INDONESIAN_MONTHS).some((m) => str.toUpperCase().includes(m));
         if (looksLikeDate) {
           const iso = parseIndonesianDateToISO(str);
           str = iso ?? '';
         } else {
-          // Bukan format tanggal (misal "X", "OK"), biarkan apa adanya tapi collapse spasi
           str = str.replace(/\s+/g, ' ');
         }
       }
     } else if (str) {
-      // Untuk field lain tetap trim + collapse spasi ganda + hilangkan NBSP
       str = str.replace(/\s+/g, ' ');
-      if (str === '-' || str.toUpperCase() === 'NULL') str = '';
+      if (str === '-' || str.toUpperCase() === 'NULL' || str.toUpperCase() === 'N/A') str = '';
     }
     result[col.key as keyof DataLengkapUtamaValues] = str === '' ? null : str;
   }
@@ -255,11 +284,25 @@ function buildHeaderCandidates(col: DataLengkapUtamaColumn): string[] {
 export function parseDataLengkapUtamaRows(rows: unknown[][]): DataLengkapUtamaValues[] {
   if (rows.length < 3) throw new Error('File Excel kosong atau tidak valid (minimal 2 baris header + 1 baris data)');
 
-  const headerIdx = rows.findIndex(
-    (row) =>
-      row.some((c) => normalizeHeader(c) === 'PPID') &&
-      row.some((c) => normalizeHeader(c).startsWith('NAMA LOKET'))
-  );
+  // Scan hanya 15 baris pertama untuk konsistensi dengan bailoutParser (maxScan), hindari title jauh
+  const scanLimit = Math.min(rows.length, 15);
+  let headerIdx = -1;
+  for (let i = 0; i < scanLimit; i++) {
+    const row = rows[i];
+    if (!row || row.length === 0) continue;
+    if (row.every((c) => stripInvisible(String(c ?? '')).trim() === '')) continue;
+    const norms = row.map((c) => normalizeHeader(c));
+    if (norms.includes('PPID') && norms.some((c) => c.startsWith('NAMA LOKET'))) {
+      headerIdx = i;
+      break;
+    }
+  }
+  // fallback full scan jika tidak ketemu di 15 pertama (compat legacy)
+  if (headerIdx === -1) {
+    headerIdx = rows.findIndex(
+      (row) => row.some((c) => normalizeHeader(c) === 'PPID') && row.some((c) => normalizeHeader(c).startsWith('NAMA LOKET'))
+    );
+  }
 
   if (headerIdx < 0) {
     throw new Error('Header tidak ditemukan (cari baris yang berisi PPID)');
@@ -296,7 +339,7 @@ export function parseDataLengkapUtamaRows(rows: unknown[][]): DataLengkapUtamaVa
   for (let i = headerIdx + 1; i < rows.length; i++) {
     const row = rows[i];
     if (!Array.isArray(row)) continue;
-    const cells = row.map((c) => (c === undefined || c === null ? '' : String(c).trim()));
+    const cells = row.map((c) => (c === undefined || c === null ? '' : stripInvisible(String(c)).replace(/[\t\n]/g, ' ').trim()));
     if (cells.every((c) => c === '')) continue;
 
     const obj: Record<string, string> = {};
@@ -312,23 +355,26 @@ export function parseDataLengkapUtamaRows(rows: unknown[][]): DataLengkapUtamaVa
 }
 
 export function parseDataLengkapUtamaPaste(text: string): DataLengkapUtamaValues[] {
-  // Bersihkan karakter invisible sebelum split
-  const cleanedText = text.replace(/[\u00A0]/g, ' ');
-  const rows = cleanedText
-    .split('\n')
-    .map((line) => line.replace(/\r/g, '').split('\t').map((c) => cleanInvisibleChars(c).trim()))
-    .filter((cells) => cells.some((c) => c !== ''));
+  // Bersihkan karakter invisible (NBSP, zero-width, \r) tapi pertahankan \t sebagai delimiter
+  const sanitized = stripInvisible(text).replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  const rawLines = sanitized.split('\n').map((l) => l.trim()).filter((l) => l.length > 0);
+  const rows: string[][] = rawLines.map((line) => {
+    if (line.includes('\t')) return line.split('\t').map((c) => stripInvisible(c).replace(/[\t\n]/g, ' ').trim());
+    if (line.includes(',')) return line.split(',').map((c) => stripInvisible(c).replace(/[\t\n]/g, ' ').trim());
+    return line.split(/\s{2,}/).map((c) => stripInvisible(c).replace(/[\t\n]/g, ' ').trim());
+  });
+  const filteredRows = rows.filter((cells) => cells.some((c) => c !== ''));
 
-  if (rows.length === 0) throw new Error('Tidak ada baris data yang ditemukan');
+  if (filteredRows.length === 0) throw new Error('Tidak ada baris data yang ditemukan');
 
-  const hasHeader = rows.some((r) => r.some((c) => normalizeHeader(c) === 'PPID'));
-  if (hasHeader) return parseDataLengkapUtamaRows(rows);
+  const hasHeader = filteredRows.some((r) => r.some((c) => normalizeHeader(c) === 'PPID'));
+  if (hasHeader) return parseDataLengkapUtamaRows(filteredRows as unknown[][]);
 
-  return rows.map((cells) => {
+  return filteredRows.map((cells) => {
     const obj: Record<string, string> = {};
     for (const col of DATA_LENGKAP_UTAMA_DATA_COLUMNS) obj[col.key] = '';
     DATA_LENGKAP_UTAMA_DATA_COLUMNS.forEach((col, i) => {
-      if (i < cells.length) obj[col.key] = cleanInvisibleChars(cells[i]).trim();
+      if (i < cells.length) obj[col.key] = stripInvisible(cells[i]).replace(/[\t\n]/g, ' ').trim();
     });
     return obj as unknown as DataLengkapUtamaValues;
   });

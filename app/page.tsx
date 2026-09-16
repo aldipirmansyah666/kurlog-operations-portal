@@ -66,8 +66,8 @@ export default function Home() {
     try {
       await addResi(data);
       showToast('Resi berhasil ditambahkan', 'success');
-    } catch {
-      showToast('Gagal menambahkan resi', 'error');
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'Gagal menambahkan resi', 'error');
     } finally {
       setSubmitting(false);
     }
@@ -77,8 +77,8 @@ export default function Home() {
     try {
       await addResiBatch(items);
       showToast(`${items.length} resi berhasil diimport`, 'success');
-    } catch {
-      showToast('Gagal mengimport resi', 'error');
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'Gagal mengimport resi', 'error');
     }
   };
 
@@ -86,8 +86,8 @@ export default function Home() {
     try {
       await updateStatus(id, status);
       showToast('Status berhasil diupdate', 'success');
-    } catch {
-      showToast('Gagal mengupdate status', 'error');
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'Gagal mengupdate status', 'error');
     }
   };
 
@@ -95,8 +95,8 @@ export default function Home() {
     try {
       await addNote(resi, note);
       showToast('Catatan tersimpan', 'success');
-    } catch {
-      showToast('Gagal menyimpan catatan', 'error');
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'Gagal menyimpan catatan', 'error');
     }
   };
 
@@ -104,8 +104,8 @@ export default function Home() {
     try {
       await updateNote(id, newCatatan);
       showToast('Catatan diperbarui', 'success');
-    } catch {
-      showToast('Gagal memperbarui catatan', 'error');
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'Gagal memperbarui catatan', 'error');
     }
   };
 
@@ -114,8 +114,8 @@ export default function Home() {
     try {
       await deleteResi(deleteTarget);
       showToast('Resi berhasil dihapus', 'success');
-    } catch {
-      showToast('Gagal menghapus resi', 'error');
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'Gagal menghapus resi', 'error');
     }
     setDeleteTarget(null);
   };
@@ -124,8 +124,8 @@ export default function Home() {
     try {
       await deleteAllResi();
       showToast('Semua data resi berhasil dihapus', 'success');
-    } catch {
-      showToast('Gagal menghapus data', 'error');
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'Gagal menghapus data', 'error');
     }
     setShowDeleteAll(false);
   };
@@ -136,8 +136,8 @@ export default function Home() {
       await deleteResiBatch(ids);
       setSelectedIds(new Set());
       showToast(`${ids.length} resi berhasil dihapus`, 'success');
-    } catch {
-      showToast('Gagal menghapus resi terpilih', 'error');
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'Gagal menghapus resi terpilih', 'error');
     }
     setShowDeleteSelected(false);
   };

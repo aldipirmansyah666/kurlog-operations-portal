@@ -195,8 +195,8 @@ export default function DataLengkapUtamaPage() {
       await addItem(values);
       showToast('Data berhasil ditambahkan', 'success');
       setShowForm(false);
-    } catch {
-      showToast('Gagal menambahkan data', 'error');
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'Gagal menambahkan data', 'error');
     }
   };
 
@@ -207,8 +207,8 @@ export default function DataLengkapUtamaPage() {
       showToast('Data berhasil diperbarui', 'success');
       setShowForm(false);
       setEditItem(null);
-    } catch {
-      showToast('Gagal memperbarui data', 'error');
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'Gagal memperbarui data', 'error');
     }
   };
 
@@ -217,8 +217,8 @@ export default function DataLengkapUtamaPage() {
     try {
       await deleteItem(deleteTarget);
       showToast('Data berhasil dihapus', 'success');
-    } catch {
-      showToast('Gagal menghapus data', 'error');
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'Gagal menghapus data', 'error');
     }
     setDeleteTarget(null);
   };
@@ -228,8 +228,8 @@ export default function DataLengkapUtamaPage() {
       await deleteAll();
       showToast('Semua data berhasil dihapus', 'success');
       setShowClearAll(false);
-    } catch {
-      showToast('Gagal menghapus data', 'error');
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'Gagal menghapus data', 'error');
     }
   };
 
@@ -325,9 +325,10 @@ export default function DataLengkapUtamaPage() {
     try {
       await importItems(items);
       showToast(`Berhasil mengimport ${items.length} data`, 'success');
-    } catch {
-      showToast('Gagal mengimport data', 'error');
-      throw new Error('Import gagal');
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Gagal mengimport data';
+      showToast(msg, 'error');
+      throw new Error(msg);
     }
   };
 

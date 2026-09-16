@@ -13,7 +13,7 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import type { ValidatedReconcileRow, ExcelValidationResult } from '@/lib/types';
-import { normalizeReconcileRows, validateAll, validateExcelFile } from '@/lib/reconcileValidator';
+import { normalizeReconcileRows, parseReconcileRowsFromAOA, validateAll, validateExcelFile } from '@/lib/reconcileValidator';
 import EmptyState from '@/app/components/ui/EmptyState';
 import { MAX_EXCEL_SIZE_BYTES, validateFileSize, validateExcelMagicBytes } from '@/lib/fileValidation';
 
@@ -51,8 +51,12 @@ export default function ReconcilePage() {
       const sheetName = workbook.SheetNames[0];
       if (!sheetName) throw new Error('No sheet found');
       const sheet = workbook.Sheets[sheetName];
-      const jsonData = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: '' });
-      const normalized = normalizeReconcileRows(jsonData);
+      const aoa = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: '' }) as unknown[][];
+      let normalized = parseReconcileRowsFromAOA(aoa);
+      if (normalized.length === 0) {
+        const jsonData = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: '' });
+        normalized = normalizeReconcileRows(jsonData);
+      }
       const { valid, rejected } = validateAll(normalized);
       const fileResult = validateExcelFile(normalized);
       setValidRows(valid);

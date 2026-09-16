@@ -48,7 +48,11 @@ export function useDataLengkap() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'data_lengkap_utama' }, () => {
         fetchData();
       })
-      .subscribe();
+      .subscribe((status) => {
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          console.warn(`[realtime:data-lengkap] status: ${status}`);
+        }
+      });
     return () => {
       supabase.removeChannel(channel);
     };
@@ -103,15 +107,18 @@ export function useDataLengkap() {
   const importItems = useCallback(
     async (items: DataLengkapItem[]) => {
       const values = items.map((item) => sanitizeDataLengkapUtamaValues(dataLengkapItemToUtamaValues(item)) as unknown as Record<string, unknown>);
-      // Use batch endpoint
-      const res = await fetch('/api/data-lengkap-utama', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items: values }),
-      });
-      if (!res.ok) {
-        const j = await res.json().catch(() => ({}));
-        throw new Error(j.error || 'Gagal import');
+      const CHUNK = 500;
+      for (let i = 0; i < values.length; i += CHUNK) {
+        const chunk = values.slice(i, i + CHUNK);
+        const res = await fetch('/api/data-lengkap-utama', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ items: chunk }),
+        });
+        if (!res.ok) {
+          const j = await res.json().catch(() => ({}));
+          throw new Error(j.error || `Gagal import batch ${Math.floor(i / CHUNK) + 1}: ${res.statusText}`);
+        }
       }
       await fetchData();
     },

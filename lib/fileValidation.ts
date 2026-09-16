@@ -10,22 +10,28 @@ export function validateFileSize(file: File, maxBytes = MAX_EXCEL_SIZE_BYTES): s
 
 export function validateExcelMagicBytes(buffer: ArrayBuffer): boolean {
   const bytes = new Uint8Array(buffer.slice(0, 8));
-  
+
   // 1. Check XLSX (ZIP: PK..)
-  const isXlsx = bytes[0] === 0x50 && bytes[1] === 0x4B;
-  
+  const isXlsx = bytes[0] === 0x50 && bytes[1] === 0x4b;
   // 2. Check XLS Binary (OLE2 Header)
-  const isXlsBinary = bytes[0] === 0xD0 && bytes[1] === 0xCF;
+  const isXlsBinary = bytes[0] === 0xd0 && bytes[1] === 0xcf;
 
   if (isXlsx || isXlsBinary) return true;
 
-  // 3. Fallback: Check if file is a Text/HTML export saved as .xls
+  // 3. Strict fallback: hanya terima HTML/XML table export (bukan CSV/text sembarang)
+  // Sebelumnya `isCsvExport = ',' || '\t' || '\n'` akan meloloskan setiap .txt
+  // Sekarang: harus mengandung <table> atau <html><?xml dan minimal 50 char + mengandung tab/comma sebagai delimiter yang bermakna
   try {
-    const textPreview = new TextDecoder('utf-8').decode(buffer.slice(0, 200)).toLowerCase();
+    if (buffer.byteLength < 50) return false;
+    const textPreview = new TextDecoder('utf-8').decode(buffer.slice(0, 1024)).toLowerCase();
     const isHtmlExport = textPreview.includes('<html') || textPreview.includes('<?xml') || textPreview.includes('<table');
-    const isCsvExport = textPreview.includes(',') || textPreview.includes('\t') || textPreview.includes('\n');
-    
-    return isHtmlExport || isCsvExport;
+    if (isHtmlExport) return true;
+    // CSV-like export saved as .xls: harus punya header-like row dengan koma/tab + baris kedua
+    // Minimal: mengandung huruf + delimiter + newline, dan bukan sekadar satu line txt
+    const hasDelimiter = textPreview.includes(',') || textPreview.includes('\t');
+    const hasNewline = textPreview.includes('\n');
+    const looksLikeCsv = hasDelimiter && hasNewline && /[a-z]/i.test(textPreview) && textPreview.split('\n').filter((l) => l.trim()).length >= 2;
+    return looksLikeCsv;
   } catch {
     return false;
   }

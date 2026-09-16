@@ -16,23 +16,70 @@ import type { BaggingRow } from '@/lib/types';
 import EmptyState from '@/app/components/ui/EmptyState';
 import { MAX_EXCEL_SIZE_BYTES, validateFileSize, validateExcelMagicBytes } from '@/lib/fileValidation';
 import { buildBaggingMessage } from '@/lib/baggingMessage';
+import { parseBaggingRowsFromAOA } from '@/lib/baggingParser';
+import { normalizePeriodeToISO } from '@/lib/bailoutParser';
+
+const BAGGING_NBSP_REGEX = /\u00A0/g;
+const BAGGING_ZERO_WIDTH_REGEX = /[\uFEFF\u200B\u200C\u200D\u2060]/g;
+function stripBagging(v: string): string {
+  return v.replace(BAGGING_NBSP_REGEX, ' ').replace(BAGGING_ZERO_WIDTH_REGEX, '').replace(/[\t\r\n]/g, ' ').trim();
+}
 
 function formatDateDDMMYYYY(value: unknown): string {
-  if (!value) return '-';
-  let date: Date;
-  if (value instanceof Date || (typeof value === 'object' && value !== null && 'getTime' in value)) {
-    date = value as Date;
-  } else if (typeof value === 'number') {
-    date = new Date((value - 25569) * 86400 * 1000);
-  } else {
-    const str = String(value).trim().replaceAll(' ', 'T');
-    date = new Date(str);
+  if (!value && value !== 0) return '-';
+  // Jika value adalah Date object
+  if (value instanceof Date) {
+    if (isNaN(value.getTime())) return String(value);
+    const d = String(value.getDate()).padStart(2, '0');
+    const m = String(value.getMonth() + 1).padStart(2, '0');
+    const y = value.getFullYear();
+    return `${d}/${m}/${y}`;
   }
-  if (isNaN(date.getTime())) return String(value);
-  const d = String(date.getDate()).padStart(2, '0');
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const y = date.getFullYear();
-  return `${d}/${m}/${y}`;
+  // Jika object dengan getTime (tapi bukan Date) — guard type-safe
+  if (typeof value === 'object' && value !== null && typeof (value as { getTime?: unknown }).getTime === 'function') {
+    try {
+      const dt = value as Date;
+      if (!isNaN(dt.getTime())) {
+        const d = String(dt.getDate()).padStart(2, '0');
+        const m = String(dt.getMonth() + 1).padStart(2, '0');
+        const y = dt.getFullYear();
+        return `${d}/${m}/${y}`;
+      }
+    } catch {
+      return String(value);
+    }
+  }
+  if (typeof value === 'number') {
+    // Excel serial atau YYYYMMDD numeric — coba via normalizePeriodeToISO dulu
+    const iso = normalizePeriodeToISO(value);
+    if (iso) {
+      const [y, m, d] = iso.split('-');
+      return `${d}/${m}/${y}`;
+    }
+    // Fallback serial
+    const date = new Date((value - 25569) * 86400 * 1000);
+    if (!isNaN(date.getTime())) {
+      const d = String(date.getDate()).padStart(2, '0');
+      const m = String(date.getMonth() + 1).padStart(2, '0');
+      const y = date.getFullYear();
+      return `${d}/${m}/${y}`;
+    }
+    return String(value);
+  }
+  const str = String(value).trim();
+  const iso = normalizePeriodeToISO(str);
+  if (iso) {
+    const [y, m, d] = iso.split('-');
+    return `${d}/${m}/${y}`;
+  }
+  const date = new Date(str);
+  if (!isNaN(date.getTime())) {
+    const d = String(date.getDate()).padStart(2, '0');
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const y = date.getFullYear();
+    return `${d}/${m}/${y}`;
+  }
+  return String(value);
 }
 
 export default function BaggingPage() {
@@ -67,8 +114,24 @@ export default function BaggingPage() {
           const sheetName = workbook.SheetNames[0];
           if (!sheetName) continue;
           const sheet = workbook.Sheets[sheetName];
-          const jsonData = XLSX.utils.sheet_to_json<BaggingRow>(sheet, { defval: '' });
-          allParsedRows.push(...jsonData);
+          const aoa = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: '' }) as unknown[][];
+          const parsed = parseBaggingRowsFromAOA(aoa);
+          // Fallback ke sheet_to_json jika AOA tidak menemukan header dinamis (mis. sheet tanpa header jelas)
+          if (parsed.length > 0) allParsedRows.push(...parsed);
+          else {
+            const jsonData = XLSX.utils.sheet_to_json<BaggingRow>(sheet, { defval: '' });
+            // Sanitasi invisible ringan untuk fallback
+            const sanitized = jsonData.map((row) => {
+              const obj: BaggingRow = {};
+              for (const [k, v] of Object.entries(row)) {
+                const cleanKey = String(k).replace(/[\u00A0]/g, ' ').replace(/[\uFEFF\u200B\u200C\u200D]/g, '').trim();
+                const cleanVal = typeof v === 'string' ? v.replace(/[\u00A0]/g, ' ').replace(/[\uFEFF\u200B\u200C\u200D\r]/g, '').trim() : v;
+                obj[cleanKey] = cleanVal as unknown as string;
+              }
+              return obj;
+            });
+            allParsedRows.push(...sanitized);
+          }
         } catch (err) {
           console.error(`Error reading ${file.name}:`, err);
           setUploadError(`Gagal membaca ${file.name}`);
@@ -110,14 +173,15 @@ export default function BaggingPage() {
   };
 
   const filteredBagging = useMemo(
-    () => baggingData.filter((row) => String(row['Status Bagging'] || '').trim().toLowerCase() === 'belum dibagging'),
+    () => baggingData.filter((row) => stripBagging(String(row['Status Bagging'] ?? '')).toLowerCase() === 'belum dibagging'),
     [baggingData]
   );
 
   const groupedByAgen = useMemo(
     () =>
       filteredBagging.reduce<Record<string, BaggingRow[]>>((acc, row) => {
-        const agen = String(row['Agen'] || 'LAINNYA').trim();
+        const raw = String(row['Agen'] ?? 'LAINNYA');
+        const agen = stripBagging(raw).replace(/\s+/g, ' ') || 'LAINNYA';
         if (!acc[agen]) acc[agen] = [];
         acc[agen].push(row);
         return acc;
