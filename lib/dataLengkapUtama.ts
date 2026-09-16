@@ -45,29 +45,29 @@ export const DATA_LENGKAP_UTAMA_COLUMNS: DataLengkapUtamaColumn[] = [
   { key: 'kab_kota', label: 'KAB/KOTA', group: 'ALAMAT LENGKAP', aliases: ['KAB/KOT', 'KAB/KOTA', 'KABUPATEN', 'KOTA'] },
   { key: 'propinsi', label: 'PROPINSI', group: 'ALAMAT LENGKAP', aliases: ['PROPINSI', 'PROVINSI'] },
   { key: 'kode_pos', label: 'KODE POS', group: 'ALAMAT LENGKAP', aliases: ['KODE POS', 'KODEPOS'] },
-  // E. Legalitas & Kontak
+  // E. Legalitas & Kontak — strict header-name mapping agar tidak geser
   { key: 'no_ktp', label: 'NO KTP', group: '', aliases: ['NO KTP', 'NIK'] },
   { key: 'no_npwp', label: 'NO NPWP', group: '', aliases: ['NO NPWP', 'NPWP'] },
-  { key: 'electric_area', label: 'ELECTRIC AREA', group: '' },
-  { key: 'rekomendasi', label: 'REKOMENDASI', group: '' },
+  { key: 'electric_area', label: 'ELECTRIC AREA', group: '', aliases: ['ELECTRIC AREA'] },
+  { key: 'rekomendasi', label: 'REKOMENDASI', group: '', aliases: ['REKOMENDASI'] },
   { key: 'no_hp_pemilik', label: 'NO HP PEMILIK', group: '', aliases: ['NO HP PEMILIK'] },
   { key: 'no_hp_loket', label: 'NO.HP LOKET', group: '', aliases: ['NO.HP LOKET', 'NO HP LOKET'] },
   { key: 'email', label: 'EMAIL', group: '', aliases: ['EMAIL'] },
-  // F. Akun System & Area
-  { key: 'no_dirian', label: 'NO DIRIAN', group: '' },
-  { key: 'location_id', label: 'LOCATION ID', group: '' },
-  { key: 'user_mile', label: 'USER MILE', group: '' },
-  { key: 'password_mile', label: 'PASSWORD MILE', group: '' },
-  { key: 'regional', label: 'REGIONAL', group: '' },
-  { key: 'kcu_kc', label: 'KCU/KC', group: '' },
+  // F. Akun System & Area — strict mapping
+  { key: 'no_dirian', label: 'NO DIRIAN', group: '', aliases: ['NO DIRIAN'] },
+  { key: 'location_id', label: 'LOCATION ID', group: '', aliases: ['LOCATION ID'] },
+  { key: 'user_mile', label: 'USER MILE', group: '', aliases: ['USER MILE'] },
+  { key: 'password_mile', label: 'PASSWORD MILE', group: '', aliases: ['PASSWORD MILE'] },
+  { key: 'regional', label: 'REGIONAL', group: '', aliases: ['REGIONAL'] },
+  { key: 'kcu_kc', label: 'KCU/KC', group: '', aliases: ['KCU/KC'] },
   { key: 'nib', label: 'NIB (NO INDUK BERUSAHA)', group: '', aliases: ['NIB ( NO INDUK BERUSAHA)', 'NIB (NO INDUK BERUSAHA)', 'NIB'] },
   { key: 'no_kbli', label: 'NO KBLI', group: '', aliases: ['NO KBLI', 'NO. KBLI', 'KBLI'] },
-  // G. Perbankan & Koordinat
-  { key: 'nomor_rekening', label: 'NOMOR REKENING', group: '' },
-  { key: 'nama_bank', label: 'NAMA BANK', group: '' },
-  { key: 'nama_pemilik_rekening', label: 'NAMA PEMILIK REKENING', group: '', aliases: ['NAMA PEMILIK'] },
-  { key: 'latitude', label: 'LATITUDE', group: '' },
-  { key: 'longitude', label: 'LONGITUDE', group: '' },
+  // G. Perbankan & Koordinat — LATITUDE/LONGITUDE harus map strict ke koordinat, bukan ke rekening/bank
+  { key: 'nomor_rekening', label: 'NOMOR REKENING', group: '', aliases: ['NOMOR REKENING', 'NO REKENING'] },
+  { key: 'nama_bank', label: 'NAMA BANK', group: '', aliases: ['NAMA BANK'] },
+  { key: 'nama_pemilik_rekening', label: 'NAMA PEMILIK REKENING', group: '', aliases: ['NAMA PEMILIK REKENING', 'NAMA PEMILIK REK', 'NAMA PEMILIK'] },
+  { key: 'latitude', label: 'LATITUDE', group: '', aliases: ['LATITUDE'] },
+  { key: 'longitude', label: 'LONGITUDE', group: '', aliases: ['LONGITUDE'] },
 ];
 
 export interface DataLengkapUtamaGroup {
