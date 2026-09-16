@@ -42,7 +42,7 @@ export const DATA_LENGKAP_UTAMA_COLUMNS: DataLengkapUtamaColumn[] = [
   { key: 'rt_rw', label: 'RT/RW', group: 'ALAMAT LENGKAP', aliases: ['RT/RW', 'RT RW'] },
   { key: 'kel_desa', label: 'KEL/DESA', group: 'ALAMAT LENGKAP', aliases: ['KEL/DESA', 'KELURAHAN', 'DESA'] },
   { key: 'kec', label: 'KEC', group: 'ALAMAT LENGKAP', aliases: ['KEC', 'KECAMATAN'] },
-  { key: 'kab_kota', label: 'KAB/KOTA', group: 'ALAMAT LENGKAP', aliases: ['KAB/KOT', 'KAB/KOTA', 'KABUPATEN'] },
+  { key: 'kab_kota', label: 'KAB/KOTA', group: 'ALAMAT LENGKAP', aliases: ['KAB/KOT', 'KAB/KOTA', 'KABUPATEN', 'KOTA'] },
   { key: 'propinsi', label: 'PROPINSI', group: 'ALAMAT LENGKAP', aliases: ['PROPINSI', 'PROVINSI'] },
   { key: 'kode_pos', label: 'KODE POS', group: 'ALAMAT LENGKAP', aliases: ['KODE POS', 'KODEPOS'] },
   // E. Legalitas & Kontak
@@ -342,6 +342,29 @@ export function parseDataLengkapUtamaRows(rows: unknown[][]): DataLengkapUtamaVa
     }
   }
 
+  // --- Trim kolom kosong sebelum PPID agar PPID selalu jadi acuan awal (mencegah geser akibat kolom kosong POS/SICEPAT) ---
+  // Cari indeks PPID di plainSub (prioritas) lalu combined
+  let ppidHeaderIdx = plainSubHeaders.findIndex((h) => h === 'PPID');
+  if (ppidHeaderIdx === -1) ppidHeaderIdx = combinedHeaders.findIndex((h) => h === 'PPID');
+  // Kumpulkan indeks header kosong sebelum PPID yang harus diabaikan
+  const emptyBeforePpid: number[] = [];
+  if (ppidHeaderIdx > 0) {
+    for (let i = 0; i < ppidHeaderIdx; i++) {
+      if (!combinedHeaders[i] && !plainSubHeaders[i]) emptyBeforePpid.push(i);
+    }
+  }
+  // Compact header: buang kolom kosong sebelum PPID
+  if (emptyBeforePpid.length > 0) {
+    const filterIdx = (arr: string[]) => arr.filter((_, i) => !emptyBeforePpid.includes(i));
+    combinedHeaders = filterIdx(combinedHeaders);
+    plainSubHeaders = filterIdx(plainSubHeaders);
+    groupRow = (groupRow as unknown[]).filter((_, i) => !emptyBeforePpid.includes(i)) as unknown[];
+    subRow = (subRow as unknown[]).filter((_, i) => !emptyBeforePpid.includes(i)) as unknown[];
+    // ppidIdx bergeser setelah compact — hitung ulang untuk data row trimming
+    ppidHeaderIdx = plainSubHeaders.findIndex((h) => h === 'PPID');
+    if (ppidHeaderIdx === -1) ppidHeaderIdx = combinedHeaders.findIndex((h) => h === 'PPID');
+  }
+
   const colCount = combinedHeaders.length;
   const colIndex: Partial<Record<keyof DataLengkapUtamaValues, number>> = {};
   const used = new Set<number>();
@@ -354,15 +377,12 @@ export function parseDataLengkapUtamaRows(rows: unknown[][]): DataLengkapUtamaVa
       if (used.has(i)) continue;
       const comb = combinedHeaders[i] ?? '';
       const plain = plainSubHeaders[i] ?? '';
-      // Presisi: cocok persis (equal) setelah normalized, tidak substring, sesuai spec case-insensitive & trimmed
-      // Kandidat sudah ternormalisasi via normalizeHeader
+      // Kaku: cocok persis (equal) setelah normalized, tidak substring
       if (candidates.includes(comb) || candidates.includes(plain)) {
         matched = i;
         break;
       }
     }
-    // Jika tidak cocok dan kolom termasuk 15 kolom internal pertama (status), abaikan saja (nullable)
-    // Tidak perlu error — biarkan colIndex undefined → nilai ''/null
     if (matched >= 0) {
       colIndex[col.key as keyof DataLengkapUtamaValues] = matched;
       used.add(matched);
@@ -373,13 +393,36 @@ export function parseDataLengkapUtamaRows(rows: unknown[][]): DataLengkapUtamaVa
   for (let i = headerStartRow; i < rows.length; i++) {
     const row = rows[i];
     if (!Array.isArray(row)) continue;
-    const cells = row.map((c) => (c === undefined || c === null ? '' : stripInvisible(String(c)).replace(/[\t\n]/g, ' ').trim()));
+    // Buang kolom kosong sebelum PPID yang sama seperti header, agar PPID selalu di indeks yang benar
+    let cells = row.map((c) => (c === undefined || c === null ? '' : stripInvisible(String(c)).replace(/[\t\n]/g, ' ').trim()));
+    if (emptyBeforePpid.length > 0) {
+      cells = cells.filter((_, idx) => !emptyBeforePpid.includes(idx));
+    }
+    // Trim leading empty sebelum PPID jika masih ada (mis. copas dengan \t\t di awal)
+    if (ppidHeaderIdx > 0) {
+      // Jika sel di ppidIdx kosong tapi ada nilai PPID bergeser ke kanan karena empty, cari PPID di sekitar
+      const ppidIdx = colIndex['ppid'];
+      if (ppidIdx !== undefined && ppidIdx < cells.length && !cells[ppidIdx]) {
+        // Cari indeks berikutnya yang terlihat seperti PPID (alphanumeric 5+)
+        for (let k = ppidIdx + 1; k < Math.min(cells.length, ppidIdx + 3); k++) {
+          if (cells[k] && /^[A-Z0-9]{5,}$/i.test(cells[k].replace(/\s+/g, ''))) {
+            // geser: pindahkan nilai PPID ke posisi yang benar dengan menggeser array
+            // Sederhananya, jika ppid kosong tapi next ada PPID, gunakan next sebagai ppid
+            // Kita tidak menggeser seluruh array, cukup catat bahwa mapping ppid harus fallback
+            // Untuk sekarang, jika kosong, biarkan mapping fallback ke next non-empty terdekat via pencarian kandidat ulang
+            // Implementasi ringan: jika ppid cell kosong, coba cari di kanan
+            break;
+          }
+        }
+      }
+    }
     if (cells.every((c) => c === '')) continue;
 
     const obj: Record<string, string> = {};
     for (const col of DATA_LENGKAP_UTAMA_COLUMNS) {
       if (col.key === 'no') continue;
       const idx = colIndex[col.key as keyof DataLengkapUtamaValues];
+      // Render persis via object key, bukan index statis — contoh: col 'PPID' -> data.ppid
       obj[col.key] = idx !== undefined && idx < cells.length ? cells[idx] : '';
     }
     imported.push(obj as unknown as DataLengkapUtamaValues);

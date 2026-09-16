@@ -201,7 +201,7 @@ export async function DELETE(req: Request) {
         if (error) return NextResponse.json({ error: `Gagal delete: ${error.message}` }, { status: 500 });
         if (data.length < 1000) break;
       }
-      return NextResponse.json({ success: true });
+      return NextResponse.json({ success: true, message: 'Semua data berhasil dihapus' });
     }
 
     if (id) {
@@ -232,7 +232,7 @@ export async function DELETE(req: Request) {
           if (error) return NextResponse.json({ error: `Gagal delete: ${error.message}` }, { status: 500 });
           if (data.length < 1000) break;
         }
-        return NextResponse.json({ success: true });
+        return NextResponse.json({ success: true, message: 'Semua data berhasil dihapus' });
       }
       if (typeof payload['id'] === 'string') {
         const { error } = await supabaseServer.from('data_lengkap_utama').delete().eq('id', payload['id'] as string);
