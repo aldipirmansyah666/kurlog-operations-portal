@@ -191,69 +191,120 @@ export async function DELETE(req: Request) {
       String(confirmParam ?? '').trim().toUpperCase() === 'HAPUS' ||
       String(allParam ?? '').trim().toUpperCase() === 'HAPUS';
 
-    if (isDeleteAllQuery) {
-      while (true) {
-        const { data, error: selErr } = await supabaseServer.from('data_lengkap_utama').select('id').limit(1000);
-        if (selErr) return NextResponse.json({ error: `Gagal fetch ids: ${selErr.message}` }, { status: 500 });
-        if (!data || data.length === 0) break;
-        const ids = data.map((r: { id: string }) => r.id);
-        const { error } = await supabaseServer.from('data_lengkap_utama').delete().in('id', ids);
-        if (error) return NextResponse.json({ error: `Gagal delete: ${error.message}` }, { status: 500 });
-        if (data.length < 1000) break;
+    // Helper: truncate / deleteMany dengan handling FK CASCADE
+    const executeDeleteAll = async () => {
+      try {
+        // Primary: loop delete 1000 batch via Supabase (kompatibel RLS + service_role)
+        while (true) {
+          const { data, error: selErr } = await supabaseServer.from('data_lengkap_utama').select('id').limit(1000);
+          if (selErr) throw selErr;
+          if (!data || data.length === 0) break;
+          const ids = data.map((r: { id: string }) => r.id);
+          const { error } = await supabaseServer.from('data_lengkap_utama').delete().in('id', ids);
+          if (error) throw error;
+          if (data.length < 1000) break;
+        }
+        return;
+      } catch (error) {
+        console.error('DELETE ALL ERROR:', error);
+        // Fallback: coba TRUNCATE CASCADE jika ada FK constraint
+        // Untuk Prisma: await prisma.dataLengkapUtama.deleteMany({}) atau prisma.$executeRawUnsafe('TRUNCATE TABLE "DataLengkapUtama" CASCADE;')
+        // Untuk Supabase: coba delete via neq (truncate semantik) atau RPC raw
+        const msg = String(error);
+        const isFkError = /foreign key|violates|FK|relasi|constraint/i.test(msg);
+        if (isFkError) {
+          try {
+            // Coba TRUNCATE via Supabase RPC jika ada function exec_sql, fallback ke delete all
+            // @ts-ignore - optional RPC, tidak semua instance punya
+            const rpcResult = await (supabaseServer as unknown as { rpc: (n: string, p: unknown) => Promise<{ error: unknown }> }).rpc('exec_sql', {
+              sql: 'TRUNCATE TABLE "data_lengkap_utama" CASCADE;',
+            });
+            if (rpcResult && !rpcResult.error) return;
+          } catch {}
+          // Fallback Prisma-style raw (jika proyek migrasi ke Prisma):
+          // await prisma.dataLengkapUtama.deleteMany({});
+          // await prisma.$executeRawUnsafe('TRUNCATE TABLE "DataLengkapUtama" CASCADE;');
+          // Untuk Supabase saat ini, lanjut ke fallback delete().neq di bawah
+          // Terakhir: coba hard delete tanpa filter (Supabase delete all)
+          try {
+            const { error: delErr } = await supabaseServer.from('data_lengkap_utama').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+            if (!delErr) return;
+          } catch {}
+        }
+        throw error;
       }
-      return NextResponse.json({ success: true, message: 'Semua data berhasil dihapus' });
+    };
+
+    if (isDeleteAllQuery) {
+      try {
+        await executeDeleteAll();
+        return NextResponse.json({ success: true, message: 'Semua data berhasil dihapus' });
+      } catch (error) {
+        console.error('DELETE ALL ERROR:', error);
+        return NextResponse.json({ success: false, error: String(error) }, { status: 500 });
+      }
     }
 
     if (id) {
-      const { error } = await supabaseServer.from('data_lengkap_utama').delete().eq('id', id);
-      if (error) return NextResponse.json({ error: `Gagal delete: ${error.message}` }, { status: 500 });
-      return NextResponse.json({ success: true });
+      try {
+        const { error } = await supabaseServer.from('data_lengkap_utama').delete().eq('id', id);
+        if (error) throw error;
+        return NextResponse.json({ success: true });
+      } catch (error) {
+        console.error('DELETE ALL ERROR:', error);
+        return NextResponse.json({ success: false, error: String(error) }, { status: 500 });
+      }
     }
 
-    // Coba baca body — dukung { all:true }, { deleteAll:true }, { confirm:'HAPUS' }, { confirm:'hapus' } (case-insensitive)
+    // Coba baca body — dukung { all:true }, { deleteAll:true }, { confirm:'HAPUS' }
     let payload: Record<string, unknown> | null = null;
     try {
       const body = await req.json();
       payload = body as Record<string, unknown>;
     } catch {
-      // no body atau bukan JSON — lanjut ke 400 handler
+      // no body
     }
 
     if (payload) {
       const confirmVal = String(payload['confirm'] ?? '').trim().toUpperCase();
       const isConfirmHapus = confirmVal === 'HAPUS';
       if (payload['all'] === true || payload['deleteAll'] === true || isConfirmHapus) {
-        while (true) {
-          const { data, error: selErr } = await supabaseServer.from('data_lengkap_utama').select('id').limit(1000);
-          if (selErr) return NextResponse.json({ error: `Gagal fetch ids: ${selErr.message}` }, { status: 500 });
-          if (!data || data.length === 0) break;
-          const ids = data.map((r: { id: string }) => r.id);
-          const { error } = await supabaseServer.from('data_lengkap_utama').delete().in('id', ids);
-          if (error) return NextResponse.json({ error: `Gagal delete: ${error.message}` }, { status: 500 });
-          if (data.length < 1000) break;
+        try {
+          await executeDeleteAll();
+          return NextResponse.json({ success: true, message: 'Semua data berhasil dihapus' });
+        } catch (error) {
+          console.error('DELETE ALL ERROR:', error);
+          return NextResponse.json({ success: false, error: String(error) }, { status: 500 });
         }
-        return NextResponse.json({ success: true, message: 'Semua data berhasil dihapus' });
       }
       if (typeof payload['id'] === 'string') {
-        const { error } = await supabaseServer.from('data_lengkap_utama').delete().eq('id', payload['id'] as string);
-        if (error) return NextResponse.json({ error: `Gagal delete: ${error.message}` }, { status: 500 });
-        return NextResponse.json({ success: true });
+        try {
+          const { error } = await supabaseServer.from('data_lengkap_utama').delete().eq('id', payload['id'] as string);
+          if (error) throw error;
+          return NextResponse.json({ success: true });
+        } catch (error) {
+          console.error('DELETE ALL ERROR:', error);
+          return NextResponse.json({ success: false, error: String(error) }, { status: 500 });
+        }
       }
-      // Jika body berisi ids array untuk bulk delete
       if (Array.isArray(payload['ids'])) {
         const ids = (payload['ids'] as unknown[]).map((v) => String(v)).filter(Boolean);
         if (ids.length > 0) {
-          const { error } = await supabaseServer.from('data_lengkap_utama').delete().in('id', ids);
-          if (error) return NextResponse.json({ error: `Gagal delete: ${error.message}` }, { status: 500 });
-          return NextResponse.json({ success: true });
+          try {
+            const { error } = await supabaseServer.from('data_lengkap_utama').delete().in('id', ids);
+            if (error) throw error;
+            return NextResponse.json({ success: true });
+          } catch (error) {
+            console.error('DELETE ALL ERROR:', error);
+            return NextResponse.json({ success: false, error: String(error) }, { status: 500 });
+          }
         }
       }
     }
 
-    return NextResponse.json({ error: 'ID wajib diisi atau gunakan ?all=true atau body { confirm: \"HAPUS\" }' }, { status: 400 });
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    console.error('[api/data-lengkap-utama DELETE] unexpected:', msg);
-    return NextResponse.json({ error: `Terjadi kesalahan server: ${msg}` }, { status: 500 });
+    return NextResponse.json({ error: 'ID wajib diisi atau gunakan ?all=true atau body { confirm: "HAPUS" }' }, { status: 400 });
+  } catch (error) {
+    console.error('DELETE ALL ERROR:', error);
+    return NextResponse.json({ success: false, error: String(error) }, { status: 500 });
   }
 }
