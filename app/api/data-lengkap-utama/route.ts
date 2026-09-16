@@ -184,9 +184,14 @@ export async function DELETE(req: Request) {
 
     const { searchParams } = new URL(req.url);
     const id = searchParams.get('id');
-    const all = searchParams.get('all');
+    const allParam = searchParams.get('all');
+    const confirmParam = searchParams.get('confirm');
+    const isDeleteAllQuery =
+      allParam === 'true' ||
+      String(confirmParam ?? '').trim().toUpperCase() === 'HAPUS' ||
+      String(allParam ?? '').trim().toUpperCase() === 'HAPUS';
 
-    if (all === 'true') {
+    if (isDeleteAllQuery) {
       while (true) {
         const { data, error: selErr } = await supabaseServer.from('data_lengkap_utama').select('id').limit(1000);
         if (selErr) return NextResponse.json({ error: `Gagal fetch ids: ${selErr.message}` }, { status: 500 });
@@ -205,10 +210,19 @@ export async function DELETE(req: Request) {
       return NextResponse.json({ success: true });
     }
 
+    // Coba baca body — dukung { all:true }, { deleteAll:true }, { confirm:'HAPUS' }, { confirm:'hapus' } (case-insensitive)
+    let payload: Record<string, unknown> | null = null;
     try {
       const body = await req.json();
-      const payload = body as Record<string, unknown>;
-      if (payload['all'] === true || payload['deleteAll'] === true) {
+      payload = body as Record<string, unknown>;
+    } catch {
+      // no body atau bukan JSON — lanjut ke 400 handler
+    }
+
+    if (payload) {
+      const confirmVal = String(payload['confirm'] ?? '').trim().toUpperCase();
+      const isConfirmHapus = confirmVal === 'HAPUS';
+      if (payload['all'] === true || payload['deleteAll'] === true || isConfirmHapus) {
         while (true) {
           const { data, error: selErr } = await supabaseServer.from('data_lengkap_utama').select('id').limit(1000);
           if (selErr) return NextResponse.json({ error: `Gagal fetch ids: ${selErr.message}` }, { status: 500 });
@@ -225,11 +239,18 @@ export async function DELETE(req: Request) {
         if (error) return NextResponse.json({ error: `Gagal delete: ${error.message}` }, { status: 500 });
         return NextResponse.json({ success: true });
       }
-    } catch {
-      // no body
+      // Jika body berisi ids array untuk bulk delete
+      if (Array.isArray(payload['ids'])) {
+        const ids = (payload['ids'] as unknown[]).map((v) => String(v)).filter(Boolean);
+        if (ids.length > 0) {
+          const { error } = await supabaseServer.from('data_lengkap_utama').delete().in('id', ids);
+          if (error) return NextResponse.json({ error: `Gagal delete: ${error.message}` }, { status: 500 });
+          return NextResponse.json({ success: true });
+        }
+      }
     }
 
-    return NextResponse.json({ error: 'ID wajib diisi atau gunakan ?all=true' }, { status: 400 });
+    return NextResponse.json({ error: 'ID wajib diisi atau gunakan ?all=true atau body { confirm: \"HAPUS\" }' }, { status: 400 });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     console.error('[api/data-lengkap-utama DELETE] unexpected:', msg);

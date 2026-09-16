@@ -126,7 +126,11 @@ export function useDataLengkap() {
   );
 
   const deleteAll = useCallback(async () => {
-    const res = await fetch('/api/data-lengkap-utama?all=true', { method: 'DELETE' });
+    const res = await fetch('/api/data-lengkap-utama?all=true', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ confirm: 'HAPUS', all: true }),
+    });
     if (!res.ok) {
       const j = await res.json().catch(() => ({}));
       throw new Error(j.error || 'Gagal hapus semua');

@@ -118,7 +118,12 @@ export function useDataLengkapUtama() {
   );
 
   const deleteAll = useCallback(async () => {
-    const res = await fetch('/api/data-lengkap-utama?all=true', { method: 'DELETE' });
+    // Kirim baik query ?all=true maupun body { confirm:'HAPUS' } agar kompatibel dengan semua varian API (mencegah 400 Bad Request)
+    const res = await fetch('/api/data-lengkap-utama?all=true', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ confirm: 'HAPUS', all: true }),
+    });
     if (!res.ok) {
       const j = await res.json().catch(() => ({}));
       throw new Error(j.error || 'Gagal hapus semua');

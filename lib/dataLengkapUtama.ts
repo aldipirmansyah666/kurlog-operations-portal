@@ -37,7 +37,7 @@ export const DATA_LENGKAP_UTAMA_COLUMNS: DataLengkapUtamaColumn[] = [
   { key: 'nama_loket_kurlog', label: 'NAMA LOKET DI KURLOG', group: '', aliases: ['NAMA LOKET DI KURLOG'] },
   { key: 'nama_pemilik', label: 'NAMA PEMILIK', group: '', aliases: ['NAMA PEMILIK'] },
   // D. Kelompok Alamat
-  { key: 'alamat_pemilik_ktp', label: 'ALAMAT PEMILIK KTP', group: 'ALAMAT LENGKAP', aliases: ['ALAMAT PEMIILIK KTP', 'ALAMAT PEMILIK KTP'] },
+  { key: 'alamat_pemilik_ktp', label: 'ALAMAT PEMILIK KTP', group: 'ALAMAT LENGKAP', aliases: ['ALAMAT PEMIILIK KTP', 'ALAMAT PEMILIK KTP', 'ALAMAT KTP'] },
   { key: 'alamat_lengkap_loket', label: 'ALAMAT LENGKAP LOKET', group: 'ALAMAT LENGKAP', aliases: ['ALAMAT LENGKAP'] },
   { key: 'rt_rw', label: 'RT/RW', group: 'ALAMAT LENGKAP', aliases: ['RT/RW', 'RT RW'] },
   { key: 'kel_desa', label: 'KEL/DESA', group: 'ALAMAT LENGKAP', aliases: ['KEL/DESA', 'KELURAHAN', 'DESA'] },
