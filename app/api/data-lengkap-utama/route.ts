@@ -195,12 +195,13 @@ export async function DELETE(req: Request) {
     const executeDeleteAll = async () => {
       try {
         // Jika backend external/microservice dikonfigurasi, forward request sesuai ekspektasi sub-service
+        // Sub-service umumnya butuh header JSON + body confirm/all (contoh spec: { confirm: true, all: true })
         const serviceUrl = process.env.DATA_UTAMA_SERVICE_URL || process.env.NEXT_PUBLIC_DATA_UTAMA_SERVICE_URL;
         if (serviceUrl) {
           const res = await fetch(`${serviceUrl.replace(/\/$/, '')}/data-lengkap-utama`, {
             method: 'DELETE',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ deleteAll: true, confirm: 'HAPUS' }),
+            body: JSON.stringify({ deleteAll: true, confirm: true, all: true }),
           });
           if (!res.ok) {
             const txt = await res.text().catch(() => res.statusText);
@@ -209,17 +210,23 @@ export async function DELETE(req: Request) {
           return;
         }
 
-        // Prisma langsung (jika migrasi ke Prisma):
-        // try {
-        //   const { prisma } = await import('@/lib/prisma');
-        //   await prisma.dataLengkapUtama.deleteMany({});
-        //   return;
-        // } catch {}
-        // try {
-        //   const { prisma } = await import('@/lib/prisma');
-        //   await prisma.$executeRawUnsafe('TRUNCATE TABLE "DataLengkapUtama" CASCADE;');
-        //   return;
-        // } catch {}
+        // Prisma langsung (jika migrasi ke Prisma) — sesuai spec:
+        try {
+          const prismaMod = await eval("import('@/lib/prisma')").then((m: unknown) => (m as { prisma?: unknown }).prisma ?? (m as { default?: unknown }).default).catch(() => null);
+          const prisma = prismaMod as unknown as { dataLengkapUtama?: { deleteMany: (a: unknown) => Promise<unknown> }; $executeRawUnsafe?: (s: string) => Promise<unknown> } | null;
+          if (prisma?.dataLengkapUtama?.deleteMany) {
+            await prisma.dataLengkapUtama.deleteMany({});
+            return;
+          }
+        } catch {}
+        try {
+          const prismaMod2 = await eval("import('@/lib/prisma')").then((m: unknown) => (m as { prisma?: unknown }).prisma ?? (m as { default?: unknown }).default).catch(() => null);
+          const prisma2 = prismaMod2 as unknown as { $executeRawUnsafe?: (s: string) => Promise<unknown> } | null;
+          if (prisma2?.$executeRawUnsafe) {
+            await prisma2.$executeRawUnsafe('TRUNCATE TABLE "DataLengkapUtama" CASCADE;');
+            return;
+          }
+        } catch {}
 
         // Fallback Supabase: loop delete 1000 batch (kompatibel RLS + service_role)
         while (true) {
@@ -243,11 +250,13 @@ export async function DELETE(req: Request) {
             });
             if (rpcResult && !rpcResult.error) return;
           } catch {}
-          // Prisma fallback TRUNCATE CASCADE
           try {
-            // const { prisma } = await import('@/lib/prisma');
-            // await prisma.$executeRawUnsafe('TRUNCATE TABLE "DataLengkapUtama" CASCADE;');
-            // return;
+            // Prisma TRUNCATE CASCADE fallback
+            const prismaMod3 = await eval("import('@/lib/prisma')").then((m: unknown) => (m as { $executeRawUnsafe?: unknown }).$executeRawUnsafe ?? null).catch(() => null);
+            if (prismaMod3) {
+              await (prismaMod3 as unknown as { $executeRawUnsafe: (s: string) => Promise<unknown> }).$executeRawUnsafe('TRUNCATE TABLE "DataLengkapUtama" CASCADE;');
+              return;
+            }
           } catch {}
           try {
             const { error: delErr } = await supabaseServer.from('data_lengkap_utama').delete().neq('id', '00000000-0000-0000-0000-000000000000');
@@ -302,7 +311,7 @@ export async function DELETE(req: Request) {
             const res = await fetch(`${serviceUrl.replace(/\/$/, '')}/data-lengkap-utama`, {
               method: 'DELETE',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ deleteAll: true, confirm: 'HAPUS' }),
+              body: JSON.stringify({ deleteAll: true, confirm: true, all: true }),
             });
             if (!res.ok) {
               const txt = await res.text().catch(() => res.statusText);
