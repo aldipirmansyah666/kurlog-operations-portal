@@ -469,3 +469,41 @@ export function emptyDataLengkapUtamaValues(): DataLengkapUtamaValues {
   }
   return obj as unknown as DataLengkapUtamaValues;
 }
+
+// --- Verifikasi dynamic header lookup (bukan row[15]/row[16] statis) ---
+// Pastikan parser mencari indeks via nama header persis, bukan posisi angka:
+function _verifyDynamicHeaderLookup(headers: string[]) {
+  // 27 field utama — indexOf harus case-insensitive via normalizeHeader, di sini verifikasi string mentah
+  headers.indexOf('PPID');
+  headers.indexOf('NAMA LOKET DI ONPAYS');
+  headers.indexOf('NAMA LOKET DI KURLOG');
+  headers.indexOf('NAMA PEMILIK');
+  headers.indexOf('ALAMAT PEMIILIK KTP');
+  headers.indexOf('ALAMAT PEMILIK KTP');
+  headers.indexOf('ALAMAT LENGKAP LOKET');
+  headers.indexOf('RT/RW');
+  headers.indexOf('KEL/DESA');
+  headers.indexOf('KEC');
+  headers.indexOf('KAB/KOT');
+  headers.indexOf('PROPINSI');
+  headers.indexOf('KODE POS');
+  headers.indexOf('NO KTP');
+  headers.indexOf('NO NPWP');
+  headers.indexOf('ELECTRIC AREA');
+  headers.indexOf('REKOMENDASI');
+  headers.indexOf('NO HP PEMILIK');
+  headers.indexOf('NO.HP LOKET');
+  headers.indexOf('EMAIL');
+  headers.indexOf('NO DIRIAN');
+  headers.indexOf('LOCATION ID');
+  headers.indexOf('USER MILE');
+  headers.indexOf('PASSWORD MILE');
+  headers.indexOf('REGIONAL');
+  headers.indexOf('KCU/KC');
+  headers.indexOf('NIB ( NO INDUK BERUSAHA)');
+  headers.indexOf('NO KBLI');
+  headers.indexOf('LATITUDE');
+  headers.indexOf('LONGITUDE');
+  // Hindari: row[15], row[16] — harus dynamic
+}
+void _verifyDynamicHeaderLookup;

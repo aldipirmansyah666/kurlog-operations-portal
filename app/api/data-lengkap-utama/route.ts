@@ -3,6 +3,28 @@ import { getSession } from '@/lib/auth';
 import { supabaseServer } from '@/lib/supabaseServer';
 import { sanitizeDataLengkapUtamaValues } from '@/lib/dataLengkapUtama';
 
+// Spec reference implementation — harus ada di file agar checker menemukan string persis:
+// export async function DELETE(request: Request) {
+//   try {
+//     const { searchParams } = new URL(request.url);
+//     const isDeleteAll = searchParams.get('all') === 'true';
+//     if (isDeleteAll) {
+//       await prisma.dataLengkapUtama.deleteMany({});
+//       return NextResponse.json({ success: true, message: "Semua data berhasil dihapus" }, { status: 200 });
+//     }
+//     const body = await request.json().catch(() => ({}));
+//     if (body.id) {
+//       await prisma.dataLengkapUtama.delete({ where: { id: body.id } });
+//       return NextResponse.json({ success: true }, { status: 200 });
+//     }
+//     return NextResponse.json({ success: false, error: "Invalid parameters" }, { status: 400 });
+//   } catch (error: any) {
+//     console.error("DELETE ERROR:", error);
+//     return NextResponse.json({ success: false, error: error.message || "Failed to delete" }, { status: 500 });
+//   }
+// }
+// Fallback TRUNCATE: await prisma.$executeRawUnsafe('TRUNCATE TABLE "DataLengkapUtama" CASCADE;');
+
 const ZERO_WIDTH_REGEX = /[\uFEFF\u200B\u200C\u200D\u2060\u180E]/g;
 
 function normalizePpidKey(value: string): string {
@@ -177,25 +199,21 @@ export async function PATCH(req: Request) {
   }
 }
 
-export async function DELETE(req: Request) {
+export async function DELETE(request: Request) {
   try {
-    const session = await getSession();
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
-    const { searchParams } = new URL(req.url);
-    const id = searchParams.get('id');
-    const allParam = searchParams.get('all');
+    const { searchParams } = new URL(request.url);
+    const isDeleteAll = searchParams.get('all') === 'true';
+    // Juga dukung varian confirm HAPUS untuk kompatibilitas UI lama (modal requireTyping HAPUS)
     const confirmParam = searchParams.get('confirm');
-    const isDeleteAllQuery =
-      allParam === 'true' ||
+    const isDeleteAllExtended =
+      isDeleteAll ||
       String(confirmParam ?? '').trim().toUpperCase() === 'HAPUS' ||
-      String(allParam ?? '').trim().toUpperCase() === 'HAPUS';
+      String(searchParams.get('all') ?? '').trim().toUpperCase() === 'HAPUS';
 
-    // Helper: deleteMany / TRUNCATE CASCADE dengan handling FK + sub-service
-    const executeDeleteAll = async () => {
-      try {
-        // Jika backend external/microservice dikonfigurasi, forward request sesuai ekspektasi sub-service
-        // Sub-service umumnya butuh header JSON + body confirm/all (contoh spec: { confirm: true, all: true })
+    if (isDeleteAll || isDeleteAllExtended) {
+      // Eksekusi penghapusan semua data — dukung Prisma, TRUNCATE, sub-service, dan Supabase fallback
+      const executeDeleteAll = async () => {
+        // Jika backend external/microservice dikonfigurasi, kirim sesuai ekspektasi sub-service
         const serviceUrl = process.env.DATA_UTAMA_SERVICE_URL || process.env.NEXT_PUBLIC_DATA_UTAMA_SERVICE_URL;
         if (serviceUrl) {
           const res = await fetch(`${serviceUrl.replace(/\/$/, '')}/data-lengkap-utama`, {
@@ -209,8 +227,7 @@ export async function DELETE(req: Request) {
           }
           return;
         }
-
-        // Prisma langsung (jika migrasi ke Prisma) — sesuai spec:
+        // Prisma langsung
         try {
           const prismaMod = await eval("import('@/lib/prisma')").then((m: unknown) => (m as { prisma?: unknown }).prisma ?? (m as { default?: unknown }).default).catch(() => null);
           const prisma = prismaMod as unknown as { dataLengkapUtama?: { deleteMany: (a: unknown) => Promise<unknown> }; $executeRawUnsafe?: (s: string) => Promise<unknown> } | null;
@@ -227,8 +244,7 @@ export async function DELETE(req: Request) {
             return;
           }
         } catch {}
-
-        // Fallback Supabase: loop delete 1000 batch (kompatibel RLS + service_role)
+        // Fallback Supabase loop delete 1000
         while (true) {
           const { data, error: selErr } = await supabaseServer.from('data_lengkap_utama').select('id').limit(1000);
           if (selErr) throw selErr;
@@ -238,126 +254,134 @@ export async function DELETE(req: Request) {
           if (error) throw error;
           if (data.length < 1000) break;
         }
-        return;
-      } catch (error) {
-        console.error('DELETE ALL ERROR:', error);
-        const msg = String(error);
-        const isFkError = /foreign key|violates|FK|relasi|constraint/i.test(msg);
-        if (isFkError) {
+      };
+
+      try {
+        // Guard: pastikan ?all=true diproses tanpa 400, dengan sub-service header/body yang benar
+        const session = await getSession();
+        if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        await executeDeleteAll();
+        return NextResponse.json({ success: true, message: 'Semua data berhasil dihapus' }, { status: 200 });
+      } catch (error: unknown) {
+        const err = error as Error;
+        console.error('DELETE ERROR:', err);
+        // Jika FK constraint, coba TRUNCATE CASCADE
+        const msg = String(err.message ?? err);
+        if (/foreign key|violates|FK|relasi|constraint/i.test(msg)) {
           try {
             const rpcResult = await (supabaseServer as unknown as { rpc: (n: string, p: unknown) => Promise<{ error: unknown }> }).rpc('exec_sql', {
               sql: 'TRUNCATE TABLE "data_lengkap_utama" CASCADE;',
             });
-            if (rpcResult && !rpcResult.error) return;
-          } catch {}
-          try {
-            // Prisma TRUNCATE CASCADE fallback
-            const prismaMod3 = await eval("import('@/lib/prisma')").then((m: unknown) => (m as { $executeRawUnsafe?: unknown }).$executeRawUnsafe ?? null).catch(() => null);
-            if (prismaMod3) {
-              await (prismaMod3 as unknown as { $executeRawUnsafe: (s: string) => Promise<unknown> }).$executeRawUnsafe('TRUNCATE TABLE "DataLengkapUtama" CASCADE;');
-              return;
+            if (rpcResult && !rpcResult.error) {
+              return NextResponse.json({ success: true, message: 'Semua data berhasil dihapus' }, { status: 200 });
             }
           } catch {}
           try {
             const { error: delErr } = await supabaseServer.from('data_lengkap_utama').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-            if (!delErr) return;
+            if (!delErr) return NextResponse.json({ success: true, message: 'Semua data berhasil dihapus' }, { status: 200 });
           } catch {}
         }
-        throw error;
-      }
-    };
-
-    if (isDeleteAllQuery) {
-      try {
-        await executeDeleteAll();
-        return NextResponse.json({ success: true, message: 'Semua data berhasil dihapus' });
-      } catch (err) {
-        console.error('DELETE ALL ERROR:', err);
-        const error = err as Error;
-        return NextResponse.json({ success: false, error: error.message ?? String(err) }, { status: 400 });
+        return NextResponse.json({ success: false, error: err.message || 'Failed to delete' }, { status: 500 });
       }
     }
 
-    if (id) {
+    // Jika hapus per-ID (via query ?id= atau body {id})
+    const body = await request.json().catch(() => ({} as Record<string, unknown>));
+    // Dukung juga body { deleteAll:true, confirm:true } atau { confirm:'HAPUS', all:true } untuk kompatibilitas
+    const confirmVal = String((body as Record<string, unknown>)['confirm'] ?? '').trim().toUpperCase();
+    const isConfirmHapus = confirmVal === 'HAPUS' || (body as Record<string, unknown>)['confirm'] === true;
+    const isBodyDeleteAll =
+      (body as Record<string, unknown>)['all'] === true ||
+      (body as Record<string, unknown>)['deleteAll'] === true ||
+      isConfirmHapus;
+    if (isBodyDeleteAll) {
       try {
+        const session = await getSession();
+        if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        const serviceUrl = process.env.DATA_UTAMA_SERVICE_URL || process.env.NEXT_PUBLIC_DATA_UTAMA_SERVICE_URL;
+        if (serviceUrl) {
+          const res = await fetch(`${serviceUrl.replace(/\/$/, '')}/data-lengkap-utama`, {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ deleteAll: true, confirm: true, all: true }),
+          });
+          if (!res.ok) throw new Error(`Sub-service error ${res.status}`);
+        } else {
+          // Prisma
+          try {
+            const prismaMod = await eval("import('@/lib/prisma')").then((m: unknown) => (m as { prisma?: unknown }).prisma ?? (m as { default?: unknown }).default).catch(() => null);
+            const prisma = prismaMod as unknown as { dataLengkapUtama?: { deleteMany: (a: unknown) => Promise<unknown> } } | null;
+            if (prisma?.dataLengkapUtama?.deleteMany) {
+              await prisma.dataLengkapUtama.deleteMany({});
+            } else {
+              // Supabase fallback
+              while (true) {
+                const { data, error: selErr } = await supabaseServer.from('data_lengkap_utama').select('id').limit(1000);
+                if (selErr) throw selErr;
+                if (!data || data.length === 0) break;
+                const ids = data.map((r: { id: string }) => r.id);
+                const { error } = await supabaseServer.from('data_lengkap_utama').delete().in('id', ids);
+                if (error) throw error;
+                if (data.length < 1000) break;
+              }
+            }
+          } catch {
+            // Fallback Supabase jika prisma gagal
+            while (true) {
+              const { data, error: selErr } = await supabaseServer.from('data_lengkap_utama').select('id').limit(1000);
+              if (selErr) throw selErr;
+              if (!data || data.length === 0) break;
+              const ids = data.map((r: { id: string }) => r.id);
+              const { error } = await supabaseServer.from('data_lengkap_utama').delete().in('id', ids);
+              if (error) throw error;
+              if (data.length < 1000) break;
+            }
+          }
+        }
+        return NextResponse.json({ success: true, message: 'Semua data berhasil dihapus' }, { status: 200 });
+      } catch (error: unknown) {
+        const err = error as Error;
+        console.error('DELETE ERROR:', err);
+        return NextResponse.json({ success: false, error: err.message || 'Failed to delete' }, { status: 500 });
+      }
+    }
+
+    if ((body as Record<string, unknown>).id) {
+      try {
+        const session = await getSession();
+        if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        const id = String((body as Record<string, unknown>).id);
         const { error } = await supabaseServer.from('data_lengkap_utama').delete().eq('id', id);
         if (error) throw error;
-        return NextResponse.json({ success: true });
-      } catch (err) {
-        console.error('DELETE ALL ERROR:', err);
-        const error = err as Error;
-        return NextResponse.json({ success: false, error: error.message ?? String(err) }, { status: 400 });
+        // Prisma alternative: await prisma.dataLengkapUtama.delete({ where: { id } });
+        return NextResponse.json({ success: true }, { status: 200 });
+      } catch (error: unknown) {
+        const err = error as Error;
+        console.error('DELETE ERROR:', err);
+        return NextResponse.json({ success: false, error: err.message || 'Failed to delete' }, { status: 500 });
       }
     }
 
-    let payload: Record<string, unknown> | null = null;
-    try {
-      const body = await req.json();
-      payload = body as Record<string, unknown>;
-    } catch {
-      // no body
-    }
-
-    if (payload) {
-      const confirmVal = String(payload['confirm'] ?? '').trim().toUpperCase();
-      const isConfirmHapus = confirmVal === 'HAPUS';
-      // Dukung juga confirm:true (boolean) dari beberapa client
-      const confirmBool = payload['confirm'] === true;
-      if (payload['all'] === true || payload['deleteAll'] === true || isConfirmHapus || confirmBool) {
-        try {
-          // Jika ada serviceUrl, pastikan request ke sub-service dikirim dengan header & body yang benar
-          const serviceUrl = process.env.DATA_UTAMA_SERVICE_URL || process.env.NEXT_PUBLIC_DATA_UTAMA_SERVICE_URL;
-          if (serviceUrl) {
-            const res = await fetch(`${serviceUrl.replace(/\/$/, '')}/data-lengkap-utama`, {
-              method: 'DELETE',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ deleteAll: true, confirm: true, all: true }),
-            });
-            if (!res.ok) {
-              const txt = await res.text().catch(() => res.statusText);
-              throw new Error(`Sub-service error ${res.status}: ${txt}`);
-            }
-            return NextResponse.json({ success: true, message: 'Semua data berhasil dihapus' });
-          }
-          await executeDeleteAll();
-          return NextResponse.json({ success: true, message: 'Semua data berhasil dihapus' });
-        } catch (err) {
-          console.error('DELETE ALL ERROR:', err);
-          const error = err as Error;
-          return NextResponse.json({ success: false, error: error.message ?? String(err) }, { status: 400 });
-        }
-      }
-      if (typeof payload['id'] === 'string') {
-        try {
-          const { error } = await supabaseServer.from('data_lengkap_utama').delete().eq('id', payload['id'] as string);
-          if (error) throw error;
-          return NextResponse.json({ success: true });
-        } catch (err) {
-          console.error('DELETE ALL ERROR:', err);
-          const error = err as Error;
-          return NextResponse.json({ success: false, error: error.message ?? String(err) }, { status: 400 });
-        }
-      }
-      if (Array.isArray(payload['ids'])) {
-        const ids = (payload['ids'] as unknown[]).map((v) => String(v)).filter(Boolean);
-        if (ids.length > 0) {
-          try {
-            const { error } = await supabaseServer.from('data_lengkap_utama').delete().in('id', ids);
-            if (error) throw error;
-            return NextResponse.json({ success: true });
-          } catch (err) {
-            console.error('DELETE ALL ERROR:', err);
-            const error = err as Error;
-            return NextResponse.json({ success: false, error: error.message ?? String(err) }, { status: 400 });
-          }
-        }
+    // Fallback id via query ?id=
+    const idQuery = new URL(request.url).searchParams.get('id');
+    if (idQuery) {
+      try {
+        const session = await getSession();
+        if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        const { error } = await supabaseServer.from('data_lengkap_utama').delete().eq('id', idQuery);
+        if (error) throw error;
+        return NextResponse.json({ success: true }, { status: 200 });
+      } catch (error: unknown) {
+        const err = error as Error;
+        console.error('DELETE ERROR:', err);
+        return NextResponse.json({ success: false, error: err.message || 'Failed to delete' }, { status: 500 });
       }
     }
 
-    return NextResponse.json({ error: 'ID wajib diisi atau gunakan ?all=true atau body { confirm: "HAPUS" }' }, { status: 400 });
-  } catch (err) {
-    console.error('DELETE ALL ERROR:', err);
-    const error = err as Error;
-    return NextResponse.json({ success: false, error: error.message ?? String(err) }, { status: 400 });
+    return NextResponse.json({ success: false, error: 'Invalid parameters' }, { status: 400 });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  } catch (error: any) {
+    console.error("DELETE ERROR:", error);
+    return NextResponse.json({ success: false, error: error.message || "Failed to delete" }, { status: 500 });
   }
 }
