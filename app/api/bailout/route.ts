@@ -1,23 +1,12 @@
 import { NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
 import { supabaseServer } from '@/lib/supabaseServer';
-import { normalizeKodeLoket, cleanBailoutValue } from '@/lib/bailoutParser';
+import { normalizeKodeLoket, cleanBailoutValue, normalizePeriodeToISO, sanitizePeriodeOrToday } from '@/lib/bailoutParser';
 
 function normalizePeriode(value: unknown): string {
-  if (!value) return new Date().toISOString().slice(0, 10);
-  const str = String(value).trim();
-  // Coba parse DD/MM/YYYY, YYYYMMDD, ISO
-  if (/^\d{8}$/.test(str)) {
-    // 20260914 -> 2026-09-14
-    return `${str.slice(0, 4)}-${str.slice(4, 6)}-${str.slice(6, 8)}`;
-  }
-  if (str.includes('/')) {
-    const [d, m, y] = str.split('/');
-    if (d && m && y) return `${y.padStart(4, '0')}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
-  }
-  const d = new Date(str);
-  if (!isNaN(d.getTime())) return d.toISOString().slice(0, 10);
-  return new Date().toISOString().slice(0, 10);
+  // Delegasi ke sanitizer terpusat yang menangani YYYYMMDD, YYYY-MM-DD, DD/MM/YYYY
+  // tanpa pernah mengembalikan "Invalid Date". Fallback ke hari ini jika tidak valid.
+  return sanitizePeriodeOrToday(value);
 }
 
 export async function POST(req: Request) {
@@ -83,7 +72,9 @@ export async function GET(req: Request) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const { searchParams } = new URL(req.url);
-  const periode = searchParams.get('periode');
+  const periodeRaw = searchParams.get('periode');
+  // Sanitasi periode query agar tidak memicu Invalid Date; abaikan jika tidak valid
+  const periode = periodeRaw ? normalizePeriodeToISO(periodeRaw) : null;
   let query = supabaseServer.from('bailout').select('*').order('periode', { ascending: false }).limit(200);
   if (periode) query = query.eq('periode', periode);
   const { data, error } = await query;
