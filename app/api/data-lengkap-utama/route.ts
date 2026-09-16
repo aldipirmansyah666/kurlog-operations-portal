@@ -191,10 +191,37 @@ export async function DELETE(req: Request) {
       String(confirmParam ?? '').trim().toUpperCase() === 'HAPUS' ||
       String(allParam ?? '').trim().toUpperCase() === 'HAPUS';
 
-    // Helper: truncate / deleteMany dengan handling FK CASCADE
+    // Helper: deleteMany / TRUNCATE CASCADE dengan handling FK + sub-service
     const executeDeleteAll = async () => {
       try {
-        // Primary: loop delete 1000 batch via Supabase (kompatibel RLS + service_role)
+        // Jika backend external/microservice dikonfigurasi, forward request sesuai ekspektasi sub-service
+        const serviceUrl = process.env.DATA_UTAMA_SERVICE_URL || process.env.NEXT_PUBLIC_DATA_UTAMA_SERVICE_URL;
+        if (serviceUrl) {
+          const res = await fetch(`${serviceUrl.replace(/\/$/, '')}/data-lengkap-utama`, {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ deleteAll: true, confirm: 'HAPUS' }),
+          });
+          if (!res.ok) {
+            const txt = await res.text().catch(() => res.statusText);
+            throw new Error(`Sub-service error ${res.status}: ${txt}`);
+          }
+          return;
+        }
+
+        // Prisma langsung (jika migrasi ke Prisma):
+        // try {
+        //   const { prisma } = await import('@/lib/prisma');
+        //   await prisma.dataLengkapUtama.deleteMany({});
+        //   return;
+        // } catch {}
+        // try {
+        //   const { prisma } = await import('@/lib/prisma');
+        //   await prisma.$executeRawUnsafe('TRUNCATE TABLE "DataLengkapUtama" CASCADE;');
+        //   return;
+        // } catch {}
+
+        // Fallback Supabase: loop delete 1000 batch (kompatibel RLS + service_role)
         while (true) {
           const { data, error: selErr } = await supabaseServer.from('data_lengkap_utama').select('id').limit(1000);
           if (selErr) throw selErr;
@@ -207,25 +234,21 @@ export async function DELETE(req: Request) {
         return;
       } catch (error) {
         console.error('DELETE ALL ERROR:', error);
-        // Fallback: coba TRUNCATE CASCADE jika ada FK constraint
-        // Untuk Prisma: await prisma.dataLengkapUtama.deleteMany({}) atau prisma.$executeRawUnsafe('TRUNCATE TABLE "DataLengkapUtama" CASCADE;')
-        // Untuk Supabase: coba delete via neq (truncate semantik) atau RPC raw
         const msg = String(error);
         const isFkError = /foreign key|violates|FK|relasi|constraint/i.test(msg);
         if (isFkError) {
           try {
-            // Coba TRUNCATE via Supabase RPC jika ada function exec_sql, fallback ke delete all
-            // @ts-ignore - optional RPC, tidak semua instance punya
             const rpcResult = await (supabaseServer as unknown as { rpc: (n: string, p: unknown) => Promise<{ error: unknown }> }).rpc('exec_sql', {
               sql: 'TRUNCATE TABLE "data_lengkap_utama" CASCADE;',
             });
             if (rpcResult && !rpcResult.error) return;
           } catch {}
-          // Fallback Prisma-style raw (jika proyek migrasi ke Prisma):
-          // await prisma.dataLengkapUtama.deleteMany({});
-          // await prisma.$executeRawUnsafe('TRUNCATE TABLE "DataLengkapUtama" CASCADE;');
-          // Untuk Supabase saat ini, lanjut ke fallback delete().neq di bawah
-          // Terakhir: coba hard delete tanpa filter (Supabase delete all)
+          // Prisma fallback TRUNCATE CASCADE
+          try {
+            // const { prisma } = await import('@/lib/prisma');
+            // await prisma.$executeRawUnsafe('TRUNCATE TABLE "DataLengkapUtama" CASCADE;');
+            // return;
+          } catch {}
           try {
             const { error: delErr } = await supabaseServer.from('data_lengkap_utama').delete().neq('id', '00000000-0000-0000-0000-000000000000');
             if (!delErr) return;
@@ -239,9 +262,10 @@ export async function DELETE(req: Request) {
       try {
         await executeDeleteAll();
         return NextResponse.json({ success: true, message: 'Semua data berhasil dihapus' });
-      } catch (error) {
-        console.error('DELETE ALL ERROR:', error);
-        return NextResponse.json({ success: false, error: String(error) }, { status: 500 });
+      } catch (err) {
+        console.error('DELETE ALL ERROR:', err);
+        const error = err as Error;
+        return NextResponse.json({ success: false, error: error.message ?? String(err) }, { status: 400 });
       }
     }
 
@@ -250,13 +274,13 @@ export async function DELETE(req: Request) {
         const { error } = await supabaseServer.from('data_lengkap_utama').delete().eq('id', id);
         if (error) throw error;
         return NextResponse.json({ success: true });
-      } catch (error) {
-        console.error('DELETE ALL ERROR:', error);
-        return NextResponse.json({ success: false, error: String(error) }, { status: 500 });
+      } catch (err) {
+        console.error('DELETE ALL ERROR:', err);
+        const error = err as Error;
+        return NextResponse.json({ success: false, error: error.message ?? String(err) }, { status: 400 });
       }
     }
 
-    // Coba baca body — dukung { all:true }, { deleteAll:true }, { confirm:'HAPUS' }
     let payload: Record<string, unknown> | null = null;
     try {
       const body = await req.json();
@@ -268,13 +292,30 @@ export async function DELETE(req: Request) {
     if (payload) {
       const confirmVal = String(payload['confirm'] ?? '').trim().toUpperCase();
       const isConfirmHapus = confirmVal === 'HAPUS';
-      if (payload['all'] === true || payload['deleteAll'] === true || isConfirmHapus) {
+      // Dukung juga confirm:true (boolean) dari beberapa client
+      const confirmBool = payload['confirm'] === true;
+      if (payload['all'] === true || payload['deleteAll'] === true || isConfirmHapus || confirmBool) {
         try {
+          // Jika ada serviceUrl, pastikan request ke sub-service dikirim dengan header & body yang benar
+          const serviceUrl = process.env.DATA_UTAMA_SERVICE_URL || process.env.NEXT_PUBLIC_DATA_UTAMA_SERVICE_URL;
+          if (serviceUrl) {
+            const res = await fetch(`${serviceUrl.replace(/\/$/, '')}/data-lengkap-utama`, {
+              method: 'DELETE',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ deleteAll: true, confirm: 'HAPUS' }),
+            });
+            if (!res.ok) {
+              const txt = await res.text().catch(() => res.statusText);
+              throw new Error(`Sub-service error ${res.status}: ${txt}`);
+            }
+            return NextResponse.json({ success: true, message: 'Semua data berhasil dihapus' });
+          }
           await executeDeleteAll();
           return NextResponse.json({ success: true, message: 'Semua data berhasil dihapus' });
-        } catch (error) {
-          console.error('DELETE ALL ERROR:', error);
-          return NextResponse.json({ success: false, error: String(error) }, { status: 500 });
+        } catch (err) {
+          console.error('DELETE ALL ERROR:', err);
+          const error = err as Error;
+          return NextResponse.json({ success: false, error: error.message ?? String(err) }, { status: 400 });
         }
       }
       if (typeof payload['id'] === 'string') {
@@ -282,9 +323,10 @@ export async function DELETE(req: Request) {
           const { error } = await supabaseServer.from('data_lengkap_utama').delete().eq('id', payload['id'] as string);
           if (error) throw error;
           return NextResponse.json({ success: true });
-        } catch (error) {
-          console.error('DELETE ALL ERROR:', error);
-          return NextResponse.json({ success: false, error: String(error) }, { status: 500 });
+        } catch (err) {
+          console.error('DELETE ALL ERROR:', err);
+          const error = err as Error;
+          return NextResponse.json({ success: false, error: error.message ?? String(err) }, { status: 400 });
         }
       }
       if (Array.isArray(payload['ids'])) {
@@ -294,17 +336,19 @@ export async function DELETE(req: Request) {
             const { error } = await supabaseServer.from('data_lengkap_utama').delete().in('id', ids);
             if (error) throw error;
             return NextResponse.json({ success: true });
-          } catch (error) {
-            console.error('DELETE ALL ERROR:', error);
-            return NextResponse.json({ success: false, error: String(error) }, { status: 500 });
+          } catch (err) {
+            console.error('DELETE ALL ERROR:', err);
+            const error = err as Error;
+            return NextResponse.json({ success: false, error: error.message ?? String(err) }, { status: 400 });
           }
         }
       }
     }
 
     return NextResponse.json({ error: 'ID wajib diisi atau gunakan ?all=true atau body { confirm: "HAPUS" }' }, { status: 400 });
-  } catch (error) {
-    console.error('DELETE ALL ERROR:', error);
-    return NextResponse.json({ success: false, error: String(error) }, { status: 500 });
+  } catch (err) {
+    console.error('DELETE ALL ERROR:', err);
+    const error = err as Error;
+    return NextResponse.json({ success: false, error: error.message ?? String(err) }, { status: 400 });
   }
 }
